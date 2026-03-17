@@ -3,15 +3,17 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { Redirect, type Href } from "expo-router";
+import { router, type Href } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { signInWithEmail, signUpWithEmail } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
@@ -29,15 +31,29 @@ export default function HomeScreen() {
   const [password, setPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function handleSubmit() {
+    setSubmitError(null);
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing details", "Email and password are required.");
+      const message = "Email and password are required.";
+      setSubmitError(message);
+      Alert.alert("Missing details", message);
       return;
     }
 
     if (mode === "signup" && !displayName.trim()) {
-      Alert.alert("Missing details", "Display name is required for sign up.");
+      const message = "Display name is required for sign up.";
+      setSubmitError(message);
+      Alert.alert("Missing details", message);
+      return;
+    }
+
+    if (password.length < 6) {
+      const message = "Password must be at least 6 characters.";
+      setSubmitError(message);
+      Alert.alert("Weak password", message);
       return;
     }
 
@@ -57,9 +73,11 @@ export default function HomeScreen() {
           password,
         });
       }
+
+      router.replace(authenticatedRoute);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to complete authentication.";
+      const message = getAuthErrorMessage(error);
+      setSubmitError(message);
       Alert.alert("Authentication failed", message);
     } finally {
       setIsSubmitting(false);
@@ -78,125 +96,137 @@ export default function HomeScreen() {
   }
 
   if (user) {
-    return <Redirect href={authenticatedRoute} />;
+    return null;
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <View style={styles.header}>
-          <View style={styles.logoBox}>
-            <Image
-              source={require("../../assets/images/Background.png")}
-              style={styles.logoImage}
-              resizeMode="cover"
-            />
-          </View>
-          <Text style={styles.title}>IPL Predictor</Text>
-          <Text style={styles.subtitle}>
-            Private leaderboard, match winner picks, and automatic scorekeeping.
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.modeRow}>
-            <Pressable
-              style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
-              onPress={() => setMode("signup")}
-            >
-              <Text
-                style={[
-                  styles.modeChipText,
-                  mode === "signup" && styles.modeChipTextActive,
-                ]}
-              >
-                Sign Up
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeChip, mode === "login" && styles.modeChipActive]}
-              onPress={() => setMode("login")}
-            >
-              <Text
-                style={[
-                  styles.modeChipText,
-                  mode === "login" && styles.modeChipTextActive,
-                ]}
-              >
-                Login
-              </Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.label}>
-            {mode === "signup" ? "CREATE ACCOUNT" : "WELCOME BACK"}
-          </Text>
-
-          {mode === "signup" ? (
-            <>
-              <TextInput
-                placeholder="Display name"
-                placeholderTextColor="#4C5D7C"
-                style={styles.input}
-                autoCapitalize="words"
-                value={displayName}
-                onChangeText={setDisplayName}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.logoBox}>
+              <Image
+                source={require("../../assets/images/Background.png")}
+                style={styles.logoImage}
+                resizeMode="cover"
               />
-              <TextInput
-                placeholder="Phone number (optional)"
-                placeholderTextColor="#4C5D7C"
-                style={styles.input}
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
-              />
-            </>
-          ) : null}
-
-          <TextInput
-            placeholder="Email address"
-            placeholderTextColor="#4C5D7C"
-            style={styles.input}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor="#4C5D7C"
-            style={styles.input}
-            secureTextEntry
-            autoCapitalize="none"
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          <Text style={styles.helperText}>
-            {mode === "signup"
-              ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
-              : "Use the email and password you registered with."}
-          </Text>
-
-          <Pressable
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.buttonText}>
-              {isSubmitting
-                ? "Please wait..."
-                : mode === "signup"
-                  ? "Create Account"
-                  : "Login"}
+            </View>
+            <Text style={styles.title}>IPL Predictor</Text>
+            <Text style={styles.subtitle}>
+              Private leaderboard, match winner picks, and automatic scorekeeping.
             </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.modeRow}>
+              <Pressable
+                style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
+                onPress={() => setMode("signup")}
+              >
+                <Text
+                  style={[
+                    styles.modeChipText,
+                    mode === "signup" && styles.modeChipTextActive,
+                  ]}
+                >
+                  Sign Up
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modeChip, mode === "login" && styles.modeChipActive]}
+                onPress={() => setMode("login")}
+              >
+                <Text
+                  style={[
+                    styles.modeChipText,
+                    mode === "login" && styles.modeChipTextActive,
+                  ]}
+                >
+                  Login
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.label}>
+              {mode === "signup" ? "CREATE ACCOUNT" : "WELCOME BACK"}
+            </Text>
+
+            {mode === "signup" ? (
+              <>
+                <TextInput
+                  placeholder="Display name"
+                  placeholderTextColor="#4C5D7C"
+                  style={styles.input}
+                  autoCapitalize="words"
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                />
+                <TextInput
+                  placeholder="Phone number (optional)"
+                  placeholderTextColor="#4C5D7C"
+                  style={styles.input}
+                  keyboardType="phone-pad"
+                  value={phoneNumber}
+                  onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
+                />
+              </>
+            ) : null}
+
+            <TextInput
+              placeholder="Email address"
+              placeholderTextColor="#4C5D7C"
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <TextInput
+              placeholder="Password"
+              placeholderTextColor="#4C5D7C"
+              style={styles.input}
+              secureTextEntry
+              autoCapitalize="none"
+              value={password}
+              onChangeText={setPassword}
+            />
+
+            <Text style={styles.helperText}>
+              {mode === "signup"
+                ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
+                : "Use the email and password you registered with."}
+            </Text>
+
+            {submitError ? (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorText}>{submitError}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.buttonText}>
+                {isSubmitting
+                  ? "Please wait..."
+                  : mode === "signup"
+                    ? "Create Account"
+                    : "Login"}
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -205,6 +235,9 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#07152E",
+  },
+  keyboardWrap: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
@@ -321,7 +354,21 @@ const styles = StyleSheet.create({
     color: "#94A4C0",
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 28,
+    marginBottom: 20,
+  },
+  errorCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#7A2A2A",
+    backgroundColor: "#311515",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 20,
+  },
+  errorText: {
+    color: "#F0B3B3",
+    fontSize: 15,
+    lineHeight: 22,
   },
   button: {
     height: 64,
@@ -345,3 +392,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 });
+
+function getAuthErrorMessage(error: unknown) {
+  const code =
+    typeof error === "object" && error && "code" in error ? String(error.code) : null;
+
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "That email is already registered. Try logging in instead.";
+    case "auth/invalid-email":
+      return "Enter a valid email address.";
+    case "auth/weak-password":
+      return "Password must be at least 6 characters.";
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+      return "Incorrect email or password.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Wait a bit and try again.";
+    case "auth/network-request-failed":
+      return "Network request failed. Check your connection and try again.";
+    default:
+      return error instanceof Error ? error.message : "Unable to complete authentication.";
+  }
+}

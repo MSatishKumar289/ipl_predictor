@@ -11,11 +11,13 @@ import {
   collection,
   doc,
   getDoc,
+  onSnapshot,
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "./firebase";
+import type { UserProfile, UserProfileRecord } from "./auth-types";
 
 const SIGNUP_BONUS = 50000;
 
@@ -33,7 +35,11 @@ export async function signUpWithEmail({
   const credential = await createUserWithEmailAndPassword(auth, email, password);
 
   await updateProfile(credential.user, { displayName });
-  await createUserProfile(credential.user, { displayName, phoneNumber });
+  await ensureUserProfile(credential.user, {
+    displayName,
+    phoneNumber,
+    grantSignupBonusIfNew: true,
+  });
 
   return credential.user;
 }
@@ -59,7 +65,72 @@ export async function logout() {
 
 export async function getUserProfile(uid: string) {
   const snapshot = await getDoc(doc(db, "users", uid));
-  return snapshot.exists() ? snapshot.data() : null;
+  return snapshot.exists() ? (snapshot.data() as UserProfile) : null;
+}
+
+export function subscribeToLeaderboardUsers(
+  callback: (users: UserProfileRecord[]) => void,
+  onError?: (error: Error) => void
+) {
+  return onSnapshot(
+    collection(db, "users"),
+    (snapshot) => {
+      const users = snapshot.docs
+        .map((userDoc) => ({
+          uid: userDoc.id,
+          ...(userDoc.data() as UserProfile),
+        }))
+        .sort((left, right) => {
+          if (right.points !== left.points) {
+            return right.points - left.points;
+          }
+
+          if (right.wins !== left.wins) {
+            return right.wins - left.wins;
+          }
+
+          if (left.losses !== right.losses) {
+            return left.losses - right.losses;
+          }
+
+          return right.totalPredictions - left.totalPredictions;
+        });
+
+      callback(users);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
+export async function ensureUserProfile(
+  user: User,
+  {
+    displayName,
+    phoneNumber,
+    grantSignupBonusIfNew = true,
+  }: {
+    displayName?: string;
+    phoneNumber?: string;
+    grantSignupBonusIfNew?: boolean;
+  }
+) {
+  const userRef = doc(db, "users", user.uid);
+  const snapshot = await getDoc(userRef);
+
+  if (snapshot.exists()) {
+    return snapshot.data() as UserProfile;
+  }
+
+  await createUserProfile(user, {
+    displayName: displayName ?? user.displayName ?? user.email?.split("@")[0] ?? "Player",
+    phoneNumber,
+    grantSignupBonus: grantSignupBonusIfNew,
+  });
+
+  const createdSnapshot = await getDoc(userRef);
+  return createdSnapshot.exists() ? (createdSnapshot.data() as UserProfile) : null;
 }
 
 async function createUserProfile(
@@ -67,19 +138,22 @@ async function createUserProfile(
   {
     displayName,
     phoneNumber,
+    grantSignupBonus,
   }: {
     displayName: string;
     phoneNumber?: string;
+    grantSignupBonus: boolean;
   }
 ) {
   const now = serverTimestamp();
+  const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
 
   await setDoc(doc(db, "users", user.uid), {
     displayName,
     email: user.email,
     phoneNumber: phoneNumber || null,
     role: "user",
-    balance: SIGNUP_BONUS,
+    balance: openingBalance,
     points: 0,
     wins: 0,
     losses: 0,
@@ -88,15 +162,17 @@ async function createUserProfile(
     updatedAt: now,
   });
 
-  await addDoc(collection(db, "transactions"), {
-    userId: user.uid,
-    type: "signup_bonus",
-    amount: SIGNUP_BONUS,
-    balanceBefore: 0,
-    balanceAfter: SIGNUP_BONUS,
-    referenceType: "system",
-    referenceId: user.uid,
-    note: "Signup bonus credited on account creation",
-    createdAt: now,
-  });
+  if (grantSignupBonus) {
+    await addDoc(collection(db, "transactions"), {
+      userId: user.uid,
+      type: "signup_bonus",
+      amount: SIGNUP_BONUS,
+      balanceBefore: 0,
+      balanceAfter: SIGNUP_BONUS,
+      referenceType: "system",
+      referenceId: user.uid,
+      note: "Signup bonus credited on account creation",
+      createdAt: now,
+    });
+  }
 }
