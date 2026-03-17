@@ -11,3 +11,7 @@ export type UserProfile = {
   losses: number;
   totalPredictions: number;
 };
+
+export type UserProfileRecord = UserProfile & {
+  uid: string;
+};
