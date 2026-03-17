@@ -41,7 +41,7 @@ export function createDemoMatches(): MatchRecord[] {
       lockAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
       status: "locked",
       winner: null,
-      isEditableBeforeLock: false,
+      isEditableBeforeLock: true,
       createdBy: "demo",
     },
     {
@@ -55,7 +55,7 @@ export function createDemoMatches(): MatchRecord[] {
       lockAt: new Date(Date.now() - 28 * 60 * 60 * 1000 - 5 * 60 * 1000).toISOString(),
       status: "settled",
       winner: "teamA",
-      isEditableBeforeLock: false,
+      isEditableBeforeLock: true,
       createdBy: "demo",
       settledAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
       settledBy: "demo-admin",
