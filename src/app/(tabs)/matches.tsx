@@ -115,76 +115,76 @@ export default function MatchesTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-        <View style={styles.header}>
-          <Text style={styles.title}>IPL 2024 Schedule</Text>
-        </View>
+          <View style={styles.header}>
+            <Text style={styles.title}>IPL 2024 Schedule</Text>
+          </View>
 
-        <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
-          {filters.map((filter) => (
-            <Pressable
-              key={filter.key}
-              style={[styles.filterItem, isDesktop && styles.filterItemDesktop]}
-              onPress={() => setActiveFilter(filter.key)}
-            >
-              <Text
-                style={[
-                  styles.filterLabel,
-                  activeFilter === filter.key && styles.filterLabelActive,
-                ]}
+          <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
+            {filters.map((filter) => (
+              <Pressable
+                key={filter.key}
+                style={[styles.filterItem, isDesktop && styles.filterItemDesktop]}
+                onPress={() => setActiveFilter(filter.key)}
               >
-                {filter.label}
-              </Text>
-              {activeFilter === filter.key ? <View style={styles.filterUnderline} /> : null}
-            </Pressable>
-          ))}
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Firestore error</Text>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        {!matches.length ? (
-          <View style={styles.demoBanner}>
-            <Text style={styles.demoBannerText}>Showing demo matches for UI testing.</Text>
-          </View>
-        ) : null}
-
-        {activeFilter === "upcoming" ? (
-          <SectionHeader title="Today's Matches" count={sections.today.length} />
-        ) : activeFilter === "live" ? (
-          <SectionHeader title="Live Matches" count={sections.live.length} />
-        ) : (
-          <SectionHeader title="Completed Matches" count={sections.completed.length} />
-        )}
-
-        {featuredMatch ? (
-          <FeaturedMatchCard
-            match={featuredMatch}
-            prediction={predictions[featuredMatch.id] ?? null}
-            onOpen={() => openMatch(featuredMatch.id)}
-          />
-        ) : (
-          <EmptyState filter={activeFilter} />
-        )}
-
-        {remainingMatches.length ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {activeFilter === "completed" ? "More results" : "Upcoming matches"}
-            </Text>
-            {remainingMatches.map((match) => (
-              <CompactMatchRow
-                key={match.id}
-                match={match}
-                prediction={predictions[match.id] ?? null}
-                onOpen={() => openMatch(match.id)}
-              />
+                <Text
+                  style={[
+                    styles.filterLabel,
+                    activeFilter === filter.key && styles.filterLabelActive,
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+                {activeFilter === filter.key ? <View style={styles.filterUnderline} /> : null}
+              </Pressable>
             ))}
           </View>
-        ) : null}
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Firestore error</Text>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {!matches.length ? (
+            <View style={styles.demoBanner}>
+              <Text style={styles.demoBannerText}>Showing demo matches for UI testing.</Text>
+            </View>
+          ) : null}
+
+          {activeFilter === "upcoming" ? (
+            <SectionHeader title="Today's Matches" count={sections.today.length} />
+          ) : activeFilter === "live" ? (
+            <SectionHeader title="Live Matches" count={sections.live.length} />
+          ) : (
+            <SectionHeader title="Completed Matches" count={sections.completed.length} />
+          )}
+
+          {featuredMatch ? (
+            <FeaturedMatchCard
+              match={featuredMatch}
+              prediction={predictions[featuredMatch.id] ?? null}
+              onOpen={() => openMatch(featuredMatch.id)}
+            />
+          ) : (
+            <EmptyState filter={activeFilter} />
+          )}
+
+          {remainingMatches.length ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                {activeFilter === "completed" ? "More results" : "Upcoming matches"}
+              </Text>
+              {remainingMatches.map((match) => (
+                <CompactMatchRow
+                  key={match.id}
+                  match={match}
+                  prediction={predictions[match.id] ?? null}
+                  onOpen={() => openMatch(match.id)}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -502,9 +502,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 18,
   },
   pageShellDesktop: {
     maxWidth: 1040,
+    gap: 24,
   },
   loadingState: {
     flex: 1,

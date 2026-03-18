@@ -173,92 +173,94 @@ export default function MyBetsTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Bet History</Text>
-          <Text style={styles.title}>My Bets</Text>
-          <Text style={styles.subtitle}>
-            Track active picks, settled outcomes, and profit across matches.
-          </Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Firestore error</Text>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+            <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
+              Bet History
+            </Text>
+            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
+            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+              Track active picks, settled outcomes, and profit across matches.
+            </Text>
           </View>
-        ) : null}
 
-        {!predictions.length ? (
-          <View style={styles.demoBanner}>
-            <Text style={styles.demoBannerText}>Showing demo bets for UI testing.</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.summaryRow}>
-          <SummaryCard label="Active" value={String(totals.active)} />
-          <SummaryCard label="Settled" value={String(totals.settled)} />
-          <SummaryCard
-            label="Profit"
-            value={`Rs. ${totals.profit.toLocaleString("en-IN")}`}
-            accent={totals.profit >= 0}
-          />
-        </View>
-
-        <View style={styles.filterRow}>
-          {filters.map((filter) => (
-            <Pressable
-              key={filter.key}
-              style={[
-                styles.filterChip,
-                activeFilter === filter.key && styles.filterChipActive,
-              ]}
-              onPress={() => setActiveFilter(filter.key)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilter === filter.key && styles.filterChipTextActive,
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.listCard}>
-          <Text style={styles.listTitle}>
-            {activeFilter === "active"
-              ? "Open Bets"
-              : activeFilter === "settled"
-                ? "Settled Bets"
-                : "All Bets"}
-          </Text>
-
-          {filteredBets.length ? (
-            filteredBets.map((bet) => (
-              <BetRow
-                key={bet.id}
-                bet={bet}
-                onOpen={() => {
-                  if (bet.match) {
-                    router.push({
-                      pathname: "/match/[id]",
-                      params: { id: bet.match.id },
-                    });
-                  }
-                }}
-              />
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>No bets in this section</Text>
-              <Text style={styles.emptyText}>
-                Place a prediction from the Matches tab and it will show up here.
-              </Text>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Firestore error</Text>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-          )}
-        </View>
+          ) : null}
+
+          {!predictions.length ? (
+            <View style={styles.demoBanner}>
+              <Text style={styles.demoBannerText}>Showing demo bets for UI testing.</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.summaryRow}>
+            <SummaryCard label="Active" value={String(totals.active)} />
+            <SummaryCard label="Settled" value={String(totals.settled)} />
+            <SummaryCard
+              label="Profit"
+              value={`Rs. ${totals.profit.toLocaleString("en-IN")}`}
+              accent={totals.profit >= 0}
+            />
+          </View>
+
+          <View style={styles.filterRow}>
+            {filters.map((filter) => (
+              <Pressable
+                key={filter.key}
+                style={[
+                  styles.filterChip,
+                  activeFilter === filter.key && styles.filterChipActive,
+                ]}
+                onPress={() => setActiveFilter(filter.key)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    activeFilter === filter.key && styles.filterChipTextActive,
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.listCard}>
+            <Text style={styles.listTitle}>
+              {activeFilter === "active"
+                ? "Open Bets"
+                : activeFilter === "settled"
+                  ? "Settled Bets"
+                  : "All Bets"}
+            </Text>
+
+            {filteredBets.length ? (
+              filteredBets.map((bet) => (
+                <BetRow
+                  key={bet.id}
+                  bet={bet}
+                  onOpen={() => {
+                    if (bet.match) {
+                      router.push({
+                        pathname: "/match/[id]",
+                        params: { id: bet.match.id },
+                      });
+                    }
+                  }}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No bets in this section</Text>
+                <Text style={styles.emptyText}>
+                  Place a prediction from the Matches tab and it will show up here.
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -364,9 +366,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 18,
   },
   pageShellDesktop: {
     maxWidth: 1040,
+    gap: 24,
   },
   loadingState: {
     flex: 1,
@@ -382,6 +386,12 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: 8,
+  },
+  headerDesktop: {
+    alignItems: "center",
+  },
+  headerTextDesktop: {
+    textAlign: "center",
   },
   eyebrow: {
     color: "#3F7DFF",
@@ -434,6 +444,7 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: "row",
     gap: 12,
+    justifyContent: "space-between",
   },
   summaryCard: {
     flex: 1,

@@ -204,106 +204,106 @@ export default function AdminScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-          <View style={styles.headerRow}>
-            <Pressable
-              style={styles.backButton}
-              onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                  return;
-                }
+            <View style={styles.headerRow}>
+              <Pressable
+                style={styles.backButton}
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                    return;
+                  }
 
-                router.replace("/(tabs)/profile");
-              }}
-            >
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
-            <View style={styles.headerTextWrap}>
-              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
-              <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
-                Create fixtures and update the final result.
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-            <Text style={styles.cardTitle}>Create Match</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Match number"
-              placeholderTextColor="#4C5D7C"
-              keyboardType="number-pad"
-              value={matchNumber}
-              onChangeText={(value) => setMatchNumber(value.replace(/[^0-9]/g, ""))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Team A name"
-              placeholderTextColor="#4C5D7C"
-              value={teamAName}
-              onChangeText={setTeamAName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Team A short code"
-              placeholderTextColor="#4C5D7C"
-              value={teamAShort}
-              onChangeText={setTeamAShort}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Team B name"
-              placeholderTextColor="#4C5D7C"
-              value={teamBName}
-              onChangeText={setTeamBName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Team B short code"
-              placeholderTextColor="#4C5D7C"
-              value={teamBShort}
-              onChangeText={setTeamBShort}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Match date (YYYY-MM-DD)"
-              placeholderTextColor="#4C5D7C"
-              value={matchDate}
-              onChangeText={setMatchDate}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Match time (HH:MM, 24h)"
-              placeholderTextColor="#4C5D7C"
-              value={matchTime}
-              onChangeText={setMatchTime}
-            />
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextWrap}>
-                <Text style={styles.toggleTitle}>Editable before lock</Text>
-                <Text style={styles.toggleSubtitle}>
-                  Switch this off if you want to freeze prediction edits manually.
+                  router.replace("/(tabs)/profile");
+                }}
+              >
+                <Text style={styles.backButtonText}>Back</Text>
+              </Pressable>
+              <View style={styles.headerTextWrap}>
+                <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
+                <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
+                  Create fixtures and update the final result.
                 </Text>
               </View>
-              <Switch
-                value={isEditableBeforeLock}
-                onValueChange={setIsEditableBeforeLock}
-                trackColor={{ false: "#334C76", true: "#1E5AE0" }}
-                thumbColor="#F7FAFF"
-              />
             </View>
 
-            <Pressable
-              style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
-              onPress={handleCreateMatch}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.primaryButtonText}>
-                {isSubmitting ? "Creating..." : "Create Match"}
-              </Text>
-            </Pressable>
-          </View>
+            <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+              <Text style={styles.cardTitle}>Create Match</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Match number"
+                placeholderTextColor="#4C5D7C"
+                keyboardType="number-pad"
+                value={matchNumber}
+                onChangeText={(value) => setMatchNumber(value.replace(/[^0-9]/g, ""))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Team A name"
+                placeholderTextColor="#4C5D7C"
+                value={teamAName}
+                onChangeText={setTeamAName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Team A short code"
+                placeholderTextColor="#4C5D7C"
+                value={teamAShort}
+                onChangeText={setTeamAShort}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Team B name"
+                placeholderTextColor="#4C5D7C"
+                value={teamBName}
+                onChangeText={setTeamBName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Team B short code"
+                placeholderTextColor="#4C5D7C"
+                value={teamBShort}
+                onChangeText={setTeamBShort}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Match date (YYYY-MM-DD)"
+                placeholderTextColor="#4C5D7C"
+                value={matchDate}
+                onChangeText={setMatchDate}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Match time (HH:MM, 24h)"
+                placeholderTextColor="#4C5D7C"
+                value={matchTime}
+                onChangeText={setMatchTime}
+              />
+
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextWrap}>
+                  <Text style={styles.toggleTitle}>Editable before lock</Text>
+                  <Text style={styles.toggleSubtitle}>
+                    Switch this off if you want to freeze prediction edits manually.
+                  </Text>
+                </View>
+                <Switch
+                  value={isEditableBeforeLock}
+                  onValueChange={setIsEditableBeforeLock}
+                  trackColor={{ false: "#334C76", true: "#1E5AE0" }}
+                  thumbColor="#F7FAFF"
+                />
+              </View>
+
+              <Pressable
+                style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+                onPress={handleCreateMatch}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSubmitting ? "Creating..." : "Create Match"}
+                </Text>
+              </Pressable>
+            </View>
 
           <View style={[styles.card, isDesktop && styles.cardDesktop]}>
             <Text style={styles.cardTitle}>Manage Live Matches</Text>
@@ -473,9 +473,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 22,
   },
   pageShellDesktop: {
     maxWidth: 1040,
+    gap: 24,
   },
   headerRow: {
     flexDirection: "row",
