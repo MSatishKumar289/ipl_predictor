@@ -443,7 +443,7 @@ function formatWinner(match: MatchRecord) {
     return "No Result";
   }
 
-  return "pending";
+  return "Yet to start";
 }
 
 const styles = StyleSheet.create({

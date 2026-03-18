@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/providers/AuthProvider";
@@ -234,6 +234,22 @@ export default function MatchDetailScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.headerRow}>
+            <Pressable
+              style={styles.backButton}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/(tabs)/matches");
+              }}
+            >
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+          </View>
+
           {matchError ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
@@ -487,6 +503,25 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 48,
     gap: 18,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backButton: {
+    minWidth: 74,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#102042",
+    borderWidth: 1,
+    borderColor: "#223A63",
+  },
+  backButtonText: {
+    color: "#DDE5F7",
+    fontSize: 15,
+    fontWeight: "700",
   },
   loadingState: {
     flex: 1,
