@@ -38,5 +38,12 @@ function AuthGate() {
     }
   }, [isLoading, navigationState?.key, router, segments, user]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#0A1325" },
+      }}
+    />
+  );
 }

@@ -4,6 +4,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,8 +16,8 @@ import { useAuth } from "@/providers/AuthProvider";
 const demoUsers: UserProfileRecord[] = [
   {
     uid: "demo-1",
-    displayName: "MSK",
-    email: "msk@example.com",
+    displayName: "Aarav",
+    email: "aarav@example.com",
     role: "user",
     balance: 64200,
     points: 27,
@@ -26,8 +27,8 @@ const demoUsers: UserProfileRecord[] = [
   },
   {
     uid: "demo-2",
-    displayName: "Arun",
-    email: "arun@example.com",
+    displayName: "Priya",
+    email: "priya@example.com",
     role: "user",
     balance: 58800,
     points: 24,
@@ -37,8 +38,8 @@ const demoUsers: UserProfileRecord[] = [
   },
   {
     uid: "demo-3",
-    displayName: "Kavi",
-    email: "kavi@example.com",
+    displayName: "Kavin",
+    email: "kavin@example.com",
     role: "user",
     balance: 53100,
     points: 18,
@@ -57,10 +58,33 @@ const demoUsers: UserProfileRecord[] = [
     losses: 5,
     totalPredictions: 10,
   },
+  {
+    uid: "demo-5",
+    displayName: "Diya",
+    email: "diya@example.com",
+    role: "user",
+    balance: 46800,
+    points: 12,
+    wins: 4,
+    losses: 4,
+    totalPredictions: 8,
+  },
+  {
+    uid: "demo-6",
+    displayName: "Vikram",
+    email: "vikram@example.com",
+    role: "user",
+    balance: 45200,
+    points: 9,
+    wins: 3,
+    losses: 4,
+    totalPredictions: 7,
+  },
 ];
 
 export default function LeaderboardTab() {
   const { user, profile } = useAuth();
+  const { width } = useWindowDimensions();
   const [users, setUsers] = useState<UserProfileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +97,7 @@ export default function LeaderboardTab() {
         setIsLoading(false);
       },
       (snapshotError) => {
+        setUsers([]);
         setError(`Leaderboard read failed: ${snapshotError.message}`);
         setIsLoading(false);
       }
@@ -81,7 +106,10 @@ export default function LeaderboardTab() {
     return unsubscribe;
   }, []);
 
-  const leaderboardUsers = users.length ? users : demoUsers;
+  const isDesktop = width >= 1024;
+  const useDemoLeaderboard = !!error || !users.length;
+  const leaderboardUsers = useDemoLeaderboard ? demoUsers : users;
+
   const rankedUsers = useMemo(
     () =>
       leaderboardUsers.map((entry, index) => ({
@@ -102,6 +130,21 @@ export default function LeaderboardTab() {
       return null;
     }
 
+    if (useDemoLeaderboard) {
+      return {
+        uid: user.uid,
+        rank: 5,
+        displayName: profile.displayName,
+        email: profile.email,
+        role: profile.role,
+        balance: profile.balance,
+        points: 14,
+        wins: 5,
+        losses: 4,
+        totalPredictions: 9,
+      };
+    }
+
     return {
       uid: user.uid,
       rank: rankedUsers.length + 1,
@@ -114,7 +157,7 @@ export default function LeaderboardTab() {
       losses: profile.losses,
       totalPredictions: profile.totalPredictions,
     };
-  }, [profile, rankedUsers, user]);
+  }, [profile, rankedUsers, useDemoLeaderboard, user]);
 
   const topThree = rankedUsers.slice(0, 3);
   const remainingUsers = rankedUsers.slice(3);
@@ -132,89 +175,94 @@ export default function LeaderboardTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Season Standings</Text>
-          <Text style={styles.title}>Leaderboard</Text>
-          <Text style={styles.subtitle}>
-            Ranked by points first, then wins, then fewer losses.
-          </Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Firestore error</Text>
-            <Text style={styles.errorText}>{error}</Text>
+      <ScrollView
+        contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
+          <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+            <Text style={styles.eyebrow}>Season Standings</Text>
+            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>Leaderboard</Text>
+            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+              Ranked by points first, then wins, then fewer losses.
+            </Text>
           </View>
-        ) : null}
 
-        {!users.length ? (
-          <View style={styles.demoBanner}>
-            <Text style={styles.demoBannerText}>Showing demo leaderboard for UI testing.</Text>
-          </View>
-        ) : null}
-
-        {currentUserEntry ? (
-          <View style={styles.meCard}>
-            <Text style={styles.meLabel}>Your Rank</Text>
-            <View style={styles.meRow}>
-              <Text style={styles.meRank}>#{currentUserEntry.rank}</Text>
-              <View style={styles.meBody}>
-                <Text style={styles.meName}>{currentUserEntry.displayName}</Text>
-                <Text style={styles.meMeta}>
-                  {currentUserEntry.points} pts - {currentUserEntry.wins}W -{" "}
-                  {currentUserEntry.losses}L - {currentUserEntry.totalPredictions} picks
-                </Text>
-              </View>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Firestore error</Text>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
-          </View>
-        ) : null}
+          ) : null}
 
-        <View style={styles.podiumRow}>
-          {topThree.map((entry, index) => (
-            <View
-              key={entry.uid}
-              style={[
-                styles.podiumCard,
-                index === 0 && styles.podiumCardFirst,
-                index === 1 && styles.podiumCardSecond,
-                index === 2 && styles.podiumCardThird,
-              ]}
-            >
-              <Text style={styles.podiumRank}>#{entry.rank}</Text>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(entry.displayName)}</Text>
-              </View>
-              <Text style={styles.podiumName}>{entry.displayName}</Text>
-              <Text style={styles.podiumPoints}>{entry.points} pts</Text>
-              <Text style={styles.podiumMeta}>
-                {entry.wins}W / {entry.losses}L
-              </Text>
+          {useDemoLeaderboard ? (
+            <View style={styles.demoBanner}>
+              <Text style={styles.demoBannerText}>Showing demo leaderboard for UI testing.</Text>
             </View>
-          ))}
-        </View>
+          ) : null}
 
-        <View style={styles.listCard}>
-          <Text style={styles.listTitle}>Full Table</Text>
-          {remainingUsers.map((entry) => {
-            const isCurrentUser = user?.uid === entry.uid;
-
-            return (
-              <View key={entry.uid} style={[styles.row, isCurrentUser && styles.rowCurrentUser]}>
-                <Text style={styles.rowRank}>#{entry.rank}</Text>
-                <View style={styles.rowAvatar}>
-                  <Text style={styles.rowAvatarText}>{getInitials(entry.displayName)}</Text>
-                </View>
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowName}>{entry.displayName}</Text>
-                  <Text style={styles.rowMeta}>
-                    {entry.wins}W - {entry.losses}L - {entry.totalPredictions} picks
+          {currentUserEntry ? (
+            <View style={styles.meCard}>
+              <Text style={styles.meLabel}>Your Rank</Text>
+              <View style={styles.meRow}>
+                <Text style={styles.meRank}>#{currentUserEntry.rank}</Text>
+                <View style={styles.meBody}>
+                  <Text style={styles.meName}>{currentUserEntry.displayName}</Text>
+                  <Text style={styles.meMeta}>
+                    {currentUserEntry.points} pts - {currentUserEntry.wins}W -{" "}
+                    {currentUserEntry.losses}L - {currentUserEntry.totalPredictions} picks
                   </Text>
                 </View>
-                <Text style={styles.rowPoints}>{entry.points}</Text>
               </View>
-            );
-          })}
+            </View>
+          ) : null}
+
+          <View style={[styles.podiumRow, isDesktop && styles.podiumRowDesktop]}>
+            {topThree.map((entry, index) => (
+              <View
+                key={entry.uid}
+                style={[
+                  styles.podiumCard,
+                  index === 0 && styles.podiumCardFirst,
+                  index === 1 && styles.podiumCardSecond,
+                  index === 2 && styles.podiumCardThird,
+                ]}
+              >
+                <Text style={styles.podiumRank}>#{entry.rank}</Text>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{getInitials(entry.displayName)}</Text>
+                </View>
+                <Text style={styles.podiumName}>{entry.displayName}</Text>
+                <Text style={styles.podiumPoints}>{entry.points} pts</Text>
+                <Text style={styles.podiumMeta}>
+                  {entry.wins}W / {entry.losses}L
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.listCard}>
+            <Text style={styles.listTitle}>Full Table</Text>
+            {remainingUsers.map((entry) => {
+              const isCurrentUser = user?.uid === entry.uid;
+
+              return (
+                <View key={entry.uid} style={[styles.row, isCurrentUser && styles.rowCurrentUser]}>
+                  <Text style={styles.rowRank}>#{entry.rank}</Text>
+                  <View style={styles.rowAvatar}>
+                    <Text style={styles.rowAvatarText}>{getInitials(entry.displayName)}</Text>
+                  </View>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowName}>{entry.displayName}</Text>
+                    <Text style={styles.rowMeta}>
+                      {entry.wins}W - {entry.losses}L - {entry.totalPredictions} picks
+                    </Text>
+                  </View>
+                  <Text style={styles.rowPoints}>{entry.points}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -245,6 +293,19 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     gap: 18,
   },
+  contentDesktop: {
+    paddingTop: 28,
+    gap: 24,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+    gap: 18,
+  },
+  pageShellDesktop: {
+    maxWidth: 1040,
+    gap: 24,
+  },
   loadingState: {
     flex: 1,
     alignItems: "center",
@@ -259,6 +320,13 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: 8,
+  },
+  headerDesktop: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  headerTextDesktop: {
+    textAlign: "center",
   },
   eyebrow: {
     color: "#3F7DFF",
@@ -351,6 +419,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "stretch",
+  },
+  podiumRowDesktop: {
+    justifyContent: "center",
   },
   podiumCard: {
     flex: 1,

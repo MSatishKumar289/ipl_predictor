@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -29,6 +30,7 @@ function teamLabel(match: MatchRecord, selection: PredictionSelection) {
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
+  const { width } = useWindowDimensions();
   const [match, setMatch] = useState<MatchRecord | null>(null);
   const [prediction, setPrediction] = useState<PredictionRecord | null>(null);
   const [publicPredictions, setPublicPredictions] = useState<PredictionRecord[]>([]);
@@ -113,6 +115,7 @@ export default function MatchDetailScreen() {
   const locked = match ? isMatchLocked(match.lockAt) : false;
   const canEdit = !!match && !locked && (!prediction || match.isEditableBeforeLock);
   const canRevealPredictions = locked || match?.status === "settled" || match?.status === "no_result";
+  const isDesktop = width >= 1024;
 
   const resultLabel = useMemo(() => {
     if (!match?.winner) {
@@ -230,10 +233,11 @@ export default function MatchDetailScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={styles.headerRow}>
             <Pressable
               style={styles.backButton}
@@ -378,6 +382,7 @@ export default function MatchDetailScreen() {
               </Text>
             )}
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -503,6 +508,17 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 48,
     gap: 18,
+  },
+  contentDesktop: {
+    paddingTop: 28,
+    paddingBottom: 40,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 920,
   },
   headerRow: {
     flexDirection: "row",

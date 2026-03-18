@@ -1,4 +1,4 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -7,7 +7,9 @@ import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
   const { profile, error } = useAuth();
+  const { width } = useWindowDimensions();
   const adminRoute = "/admin" as Href;
+  const isDesktop = width >= 1024;
 
   async function handleLogout() {
     try {
@@ -21,7 +23,11 @@ export default function ProfileTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Account</Text>
           <Text style={styles.title}>Profile</Text>
@@ -85,6 +91,7 @@ export default function ProfileTab() {
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Sign Out</Text>
         </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -149,6 +156,16 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 40,
     gap: 18,
+  },
+  contentDesktop: {
+    paddingTop: 28,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 960,
   },
   header: {
     gap: 8,

@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -68,6 +69,7 @@ const demoPredictions: PredictionRecord[] = [
 
 export default function MyBetsTab() {
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
   const [activeFilter, setActiveFilter] = useState<BetFilter>("active");
   const [predictions, setPredictions] = useState<PredictionRecord[]>([]);
   const [matches, setMatches] = useState<MatchRecord[]>([]);
@@ -151,6 +153,7 @@ export default function MyBetsTab() {
     }),
     [bets]
   );
+  const isDesktop = width >= 1024;
 
   if (isLoadingPredictions || isLoadingMatches) {
     return (
@@ -165,7 +168,11 @@ export default function MyBetsTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Bet History</Text>
           <Text style={styles.title}>My Bets</Text>
@@ -251,6 +258,7 @@ export default function MyBetsTab() {
               </Text>
             </View>
           )}
+        </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -349,6 +357,16 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 40,
     gap: 18,
+  },
+  contentDesktop: {
+    paddingTop: 28,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 1040,
   },
   loadingState: {
     flex: 1,

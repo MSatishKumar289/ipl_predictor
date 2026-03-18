@@ -11,6 +11,7 @@ import {
   Switch,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -37,6 +38,7 @@ type PendingSettlement = {
 export default function AdminScreen() {
   const router = useRouter();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
+  const { width } = useWindowDimensions();
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,6 +65,7 @@ export default function AdminScreen() {
     const source = matches.length ? matches : createDemoMatches();
     return [...source].reverse();
   }, [matches]);
+  const isDesktop = width >= 1024;
 
   if (isAuthLoading) {
     return (
@@ -196,10 +199,11 @@ export default function AdminScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={styles.headerRow}>
             <Pressable
               style={styles.backButton}
@@ -215,12 +219,14 @@ export default function AdminScreen() {
               <Text style={styles.backButtonText}>Back</Text>
             </Pressable>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.title}>Admin</Text>
-              <Text style={styles.subtitle}>Create fixtures and update the final result.</Text>
+              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
+              <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
+                Create fixtures and update the final result.
+              </Text>
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
             <Text style={styles.cardTitle}>Create Match</Text>
             <TextInput
               style={styles.input}
@@ -299,7 +305,7 @@ export default function AdminScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
             <Text style={styles.cardTitle}>Manage Live Matches</Text>
             {!matches.length ? (
               <View style={styles.demoBanner}>
@@ -393,6 +399,7 @@ export default function AdminScreen() {
               <Text style={styles.emptyText}>No fixtures yet. Create your first match above.</Text>
             )}
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -459,6 +466,17 @@ const styles = StyleSheet.create({
     paddingTop: 48,
     gap: 22,
   },
+  contentDesktop: {
+    paddingTop: 28,
+    paddingBottom: 40,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 1040,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -494,10 +512,17 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "800",
   },
+  titleDesktop: {
+    fontSize: 26,
+  },
   subtitle: {
     color: "#93A1BC",
     fontSize: 16,
     lineHeight: 24,
+  },
+  subtitleDesktop: {
+    fontSize: 15,
+    lineHeight: 22,
   },
   demoBanner: {
     borderRadius: 14,
@@ -519,6 +544,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#102042",
     padding: 20,
     gap: 14,
+  },
+  cardDesktop: {
+    padding: 18,
   },
   cardTitle: {
     color: "#F7FAFF",
