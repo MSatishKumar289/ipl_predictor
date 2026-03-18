@@ -238,152 +238,152 @@ export default function MatchDetailScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-          <View style={styles.headerRow}>
-            <Pressable
-              style={styles.backButton}
-              onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                  return;
-                }
+            <View style={styles.headerRow}>
+              <Pressable
+                style={styles.backButton}
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                    return;
+                  }
 
-                router.replace("/(tabs)/matches");
-              }}
-            >
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
-          </View>
-
-          {matchError ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Firestore error</Text>
-              <Text style={styles.errorText}>{matchError}</Text>
+                  router.replace("/(tabs)/matches");
+                }}
+              >
+                <Text style={styles.backButtonText}>Back</Text>
+              </Pressable>
             </View>
-          ) : null}
 
-          <View style={styles.heroCard}>
-            <Text style={styles.matchMeta}>Match {currentMatch.matchNumber}</Text>
-            <Text style={styles.matchTeams}>
-              {currentMatch.teamAName} vs {currentMatch.teamBName}
-            </Text>
-            <Text style={styles.matchTime}>Starts {formatMatchDate(currentMatch.startAt)}</Text>
-            <Text style={styles.matchTime}>Locks {formatMatchDate(currentMatch.lockAt)}</Text>
-            <Text style={styles.matchHint}>
-              One active prediction per user. Editing uses full replacement before lock.
-            </Text>
-            {resultLabel ? <Text style={styles.resultText}>Result: {resultLabel}</Text> : null}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Prediction</Text>
-            <Text style={styles.balanceText}>
-              Balance: Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
-            </Text>
-            {predictionError ? (
-              <View style={styles.inlineError}>
-                <Text style={styles.errorText}>{predictionError}</Text>
+            {matchError ? (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorTitle}>Firestore error</Text>
+                <Text style={styles.errorText}>{matchError}</Text>
               </View>
             ) : null}
 
-            <View style={styles.selectionRow}>
-              <Pressable
-                style={[
-                  styles.selectionButton,
-                  selection === "teamA" && styles.selectionButtonActive,
-                ]}
-                onPress={() => setSelection("teamA")}
-                disabled={!canEdit}
-              >
-                <Text
-                  style={[
-                    styles.selectionText,
-                    selection === "teamA" && styles.selectionTextActive,
-                  ]}
-                >
-                  {currentMatch.teamAShort}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.selectionButton,
-                  selection === "teamB" && styles.selectionButtonActive,
-                ]}
-                onPress={() => setSelection("teamB")}
-                disabled={!canEdit}
-              >
-                <Text
-                  style={[
-                    styles.selectionText,
-                    selection === "teamB" && styles.selectionTextActive,
-                  ]}
-                >
-                  {currentMatch.teamBShort}
-                </Text>
-              </Pressable>
+            <View style={styles.heroCard}>
+              <Text style={styles.matchMeta}>Match {currentMatch.matchNumber}</Text>
+              <Text style={styles.matchTeams}>
+                {currentMatch.teamAName} vs {currentMatch.teamBName}
+              </Text>
+              <Text style={styles.matchTime}>Starts {formatMatchDate(currentMatch.startAt)}</Text>
+              <Text style={styles.matchTime}>Locks {formatMatchDate(currentMatch.lockAt)}</Text>
+              <Text style={styles.matchHint}>
+                One active prediction per user. Editing uses full replacement before lock.
+              </Text>
+              {resultLabel ? <Text style={styles.resultText}>Result: {resultLabel}</Text> : null}
             </View>
 
-            <TextInput
-              style={[styles.input, !canEdit && styles.inputDisabled]}
-              placeholder="Bet amount"
-              placeholderTextColor="#4C5D7C"
-              keyboardType="number-pad"
-              value={amount}
-              editable={canEdit}
-              onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
-            />
-
-            {prediction ? (
-              <Text style={styles.statusTextInline}>
-                Active pick: {teamLabel(currentMatch, prediction.selectedTeam)} for Rs.{" "}
-                {prediction.amount.toLocaleString("en-IN")}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Your Prediction</Text>
+              <Text style={styles.balanceText}>
+                Balance: Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
               </Text>
-            ) : null}
+              {predictionError ? (
+                <View style={styles.inlineError}>
+                  <Text style={styles.errorText}>{predictionError}</Text>
+                </View>
+              ) : null}
 
-            {canEdit ? (
-              <Pressable
-                style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
-                onPress={handleOpenConfirm}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {prediction ? "Review Update" : "Review Prediction"}
+              <View style={styles.selectionRow}>
+                <Pressable
+                  style={[
+                    styles.selectionButton,
+                    selection === "teamA" && styles.selectionButtonActive,
+                  ]}
+                  onPress={() => setSelection("teamA")}
+                  disabled={!canEdit}
+                >
+                  <Text
+                    style={[
+                      styles.selectionText,
+                      selection === "teamA" && styles.selectionTextActive,
+                    ]}
+                  >
+                    {currentMatch.teamAShort}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.selectionButton,
+                    selection === "teamB" && styles.selectionButtonActive,
+                  ]}
+                  onPress={() => setSelection("teamB")}
+                  disabled={!canEdit}
+                >
+                  <Text
+                    style={[
+                      styles.selectionText,
+                      selection === "teamB" && styles.selectionTextActive,
+                    ]}
+                  >
+                    {currentMatch.teamBShort}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <TextInput
+                style={[styles.input, !canEdit && styles.inputDisabled]}
+                placeholder="Bet amount"
+                placeholderTextColor="#4C5D7C"
+                keyboardType="number-pad"
+                value={amount}
+                editable={canEdit}
+                onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
+              />
+
+              {prediction ? (
+                <Text style={styles.statusTextInline}>
+                  Active pick: {teamLabel(currentMatch, prediction.selectedTeam)} for Rs.{" "}
+                  {prediction.amount.toLocaleString("en-IN")}
                 </Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.lockedText}>
-                {locked
-                  ? "Predictions are locked for this match."
-                  : "Admin has disabled editing for this fixture."}
-              </Text>
-            )}
-          </View>
+              ) : null}
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Public Predictions</Text>
-            {canRevealPredictions ? (
-              publicPredictions.length ? (
-                publicPredictions.map((entry) => (
-                  <View key={entry.id} style={styles.publicRow}>
-                    <Text style={styles.publicName}>{entry.userDisplayName}</Text>
-                    <Text style={styles.publicChoice}>
-                      {teamLabel(currentMatch, entry.selectedTeam)}
-                    </Text>
-                    <Text style={styles.publicAmount}>
-                      Rs. {entry.amount.toLocaleString("en-IN")}
-                    </Text>
-                  </View>
-                ))
+              {canEdit ? (
+                <Pressable
+                  style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+                  onPress={handleOpenConfirm}
+                  disabled={isSubmitting}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {prediction ? "Review Update" : "Review Prediction"}
+                  </Text>
+                </Pressable>
               ) : (
-                <Text style={styles.emptyText}>No predictions placed for this match.</Text>
-              )
-            ) : (
-              <Text style={styles.emptyText}>
-                Predictions become visible to everyone after lock.
-              </Text>
-            )}
-          </View>
-          </View>
-        </ScrollView>
+                <Text style={styles.lockedText}>
+                  {locked
+                    ? "Predictions are locked for this match."
+                    : "Admin has disabled editing for this fixture."}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Public Predictions</Text>
+              {canRevealPredictions ? (
+                publicPredictions.length ? (
+                  publicPredictions.map((entry) => (
+                    <View key={entry.id} style={styles.publicRow}>
+                      <Text style={styles.publicName}>{entry.userDisplayName}</Text>
+                      <Text style={styles.publicChoice}>
+                        {teamLabel(currentMatch, entry.selectedTeam)}
+                      </Text>
+                      <Text style={styles.publicAmount}>
+                        Rs. {entry.amount.toLocaleString("en-IN")}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>No predictions placed for this match.</Text>
+                )
+              ) : (
+                <Text style={styles.emptyText}>
+                  Predictions become visible to everyone after lock.
+                </Text>
+              )}
+            </View>
+        </View>
+      </ScrollView>
       </KeyboardAvoidingView>
 
       <Modal
@@ -516,9 +516,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 18,
   },
   pageShellDesktop: {
     maxWidth: 920,
+    gap: 24,
   },
   headerRow: {
     flexDirection: "row",

@@ -257,9 +257,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 30,
   },
   pageShellDesktop: {
     maxWidth: 760,
+    gap: 34,
   },
   loadingState: {
     flex: 1,

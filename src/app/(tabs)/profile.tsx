@@ -28,69 +28,75 @@ export default function ProfileTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Account</Text>
-          <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>Track your balance, results, and account status.</Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Profile sync error</Text>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+            <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>Account</Text>
+            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>Profile</Text>
+            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+              Track your balance, results, and account status.
+            </Text>
           </View>
-        ) : null}
 
-        <View style={styles.heroCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitials(profile?.displayName)}</Text>
-          </View>
-          <View style={styles.heroBody}>
-            <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
-            <Text style={styles.email}>{profile?.email || "No email"}</Text>
-            <View style={styles.roleChip}>
-              <Text style={styles.roleChipText}>{profile?.role === "admin" ? "Admin" : "User"}</Text>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Profile sync error</Text>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.heroCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{getInitials(profile?.displayName)}</Text>
+            </View>
+            <View style={styles.heroBody}>
+              <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
+              <Text style={styles.email}>{profile?.email || "No email"}</Text>
+              <View style={styles.roleChip}>
+                <Text style={styles.roleChipText}>
+                  {profile?.role === "admin" ? "Admin" : "User"}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>
-            Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
-          </Text>
-          <Text style={styles.balanceHint}>This updates when bets are placed, edited, or settled.</Text>
-        </View>
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>Current Balance</Text>
+            <Text style={styles.balanceValue}>
+              Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
+            </Text>
+            <Text style={styles.balanceHint}>
+              This updates when bets are placed, edited, or settled.
+            </Text>
+          </View>
 
-        <View style={styles.statsGrid}>
-          <StatCard label="Points" value={String(profile?.points ?? 0)} accent />
-          <StatCard label="Wins" value={String(profile?.wins ?? 0)} />
-          <StatCard label="Losses" value={String(profile?.losses ?? 0)} />
-          <StatCard label="Predictions" value={String(profile?.totalPredictions ?? 0)} />
-        </View>
+          <View style={styles.statsGrid}>
+            <StatCard label="Points" value={String(profile?.points ?? 0)} accent />
+            <StatCard label="Wins" value={String(profile?.wins ?? 0)} />
+            <StatCard label="Losses" value={String(profile?.losses ?? 0)} />
+            <StatCard label="Predictions" value={String(profile?.totalPredictions ?? 0)} />
+          </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Account Details</Text>
-          <DetailRow label="Phone" value={profile?.phoneNumber || "Not added"} />
-          <DetailRow
-            label="Win Rate"
-            value={formatWinRate(profile?.wins ?? 0, profile?.losses ?? 0)}
-          />
-          <DetailRow
-            label="Status"
-            value={profile?.role === "admin" ? "Admin access enabled" : "Standard player"}
-          />
-        </View>
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Account Details</Text>
+            <DetailRow label="Phone" value={profile?.phoneNumber || "Not added"} />
+            <DetailRow
+              label="Win Rate"
+              value={formatWinRate(profile?.wins ?? 0, profile?.losses ?? 0)}
+            />
+            <DetailRow
+              label="Status"
+              value={profile?.role === "admin" ? "Admin access enabled" : "Standard player"}
+            />
+          </View>
 
-        {profile?.role === "admin" ? (
-          <Pressable style={styles.adminButton} onPress={() => router.push(adminRoute)}>
-            <Text style={styles.adminButtonText}>Open Admin Panel</Text>
+          {profile?.role === "admin" ? (
+            <Pressable style={styles.adminButton} onPress={() => router.push(adminRoute)}>
+              <Text style={styles.adminButtonText}>Open Admin Panel</Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Sign Out</Text>
           </Pressable>
-        ) : null}
-
-        <Pressable style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Sign Out</Text>
-        </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -163,12 +169,20 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
+    gap: 18,
   },
   pageShellDesktop: {
     maxWidth: 960,
+    gap: 24,
   },
   header: {
     gap: 8,
+  },
+  headerDesktop: {
+    alignItems: "center",
+  },
+  headerTextDesktop: {
+    textAlign: "center",
   },
   eyebrow: {
     color: "#3F7DFF",
@@ -281,9 +295,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
+    justifyContent: "space-between",
   },
   statCard: {
-    width: "47%",
+    width: "49%",
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#223A63",
