@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router, type Href } from "expo-router";
@@ -25,6 +26,7 @@ const authenticatedRoute = "/(tabs)/home" as Href;
 
 export default function HomeScreen() {
   const { isLoading, user } = useAuth();
+  const { width } = useWindowDimensions();
   const [mode, setMode] = useState<AuthMode>("signup");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -32,6 +34,7 @@ export default function HomeScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const isDesktop = width >= 1024;
 
   async function handleSubmit() {
     setSubmitError(null);
@@ -106,124 +109,126 @@ export default function HomeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isDesktop && styles.scrollContentDesktop]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <View style={styles.logoBox}>
-              <Image
-                source={require("../../assets/images/Background.png")}
-                style={styles.logoImage}
-                resizeMode="cover"
-              />
-            </View>
-            <Text style={styles.title}>IPL Predictor</Text>
-            <Text style={styles.subtitle}>
-              Private leaderboard, match winner picks, and automatic scorekeeping.
-            </Text>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.modeRow}>
-              <Pressable
-                style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
-                onPress={() => setMode("signup")}
-              >
-                <Text
-                  style={[
-                    styles.modeChipText,
-                    mode === "signup" && styles.modeChipTextActive,
-                  ]}
-                >
-                  Sign Up
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modeChip, mode === "login" && styles.modeChipActive]}
-                onPress={() => setMode("login")}
-              >
-                <Text
-                  style={[
-                    styles.modeChipText,
-                    mode === "login" && styles.modeChipTextActive,
-                  ]}
-                >
-                  Login
-                </Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.label}>
-              {mode === "signup" ? "CREATE ACCOUNT" : "WELCOME BACK"}
-            </Text>
-
-            {mode === "signup" ? (
-              <>
-                <TextInput
-                  placeholder="Display name"
-                  placeholderTextColor="#4C5D7C"
-                  style={styles.input}
-                  autoCapitalize="words"
-                  value={displayName}
-                  onChangeText={setDisplayName}
+          <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
+            <View style={styles.header}>
+              <View style={styles.logoBox}>
+                <Image
+                  source={require("../../assets/images/Background.png")}
+                  style={styles.logoImage}
+                  resizeMode="cover"
                 />
-                <TextInput
-                  placeholder="Phone number (optional)"
-                  placeholderTextColor="#4C5D7C"
-                  style={styles.input}
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
-                />
-              </>
-            ) : null}
-
-            <TextInput
-              placeholder="Email address"
-              placeholderTextColor="#4C5D7C"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-
-            <TextInput
-              placeholder="Password"
-              placeholderTextColor="#4C5D7C"
-              style={styles.input}
-              secureTextEntry
-              autoCapitalize="none"
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            <Text style={styles.helperText}>
-              {mode === "signup"
-                ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
-                : "Use the email and password you registered with."}
-            </Text>
-
-            {submitError ? (
-              <View style={styles.errorCard}>
-                <Text style={styles.errorText}>{submitError}</Text>
               </View>
-            ) : null}
-
-            <Pressable
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.buttonText}>
-                {isSubmitting
-                  ? "Please wait..."
-                  : mode === "signup"
-                    ? "Create Account"
-                    : "Login"}
+              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>IPL Predictor</Text>
+              <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
+                Private leaderboard, match winner picks, and automatic scorekeeping.
               </Text>
-            </Pressable>
+            </View>
+
+            <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+              <View style={styles.modeRow}>
+                <Pressable
+                  style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
+                  onPress={() => setMode("signup")}
+                >
+                  <Text
+                    style={[
+                      styles.modeChipText,
+                      mode === "signup" && styles.modeChipTextActive,
+                    ]}
+                  >
+                    Sign Up
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modeChip, mode === "login" && styles.modeChipActive]}
+                  onPress={() => setMode("login")}
+                >
+                  <Text
+                    style={[
+                      styles.modeChipText,
+                      mode === "login" && styles.modeChipTextActive,
+                    ]}
+                  >
+                    Login
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.label}>
+                {mode === "signup" ? "CREATE ACCOUNT" : "WELCOME BACK"}
+              </Text>
+
+              {mode === "signup" ? (
+                <>
+                  <TextInput
+                    placeholder="Display name"
+                    placeholderTextColor="#4C5D7C"
+                    style={styles.input}
+                    autoCapitalize="words"
+                    value={displayName}
+                    onChangeText={setDisplayName}
+                  />
+                  <TextInput
+                    placeholder="Phone number (optional)"
+                    placeholderTextColor="#4C5D7C"
+                    style={styles.input}
+                    keyboardType="phone-pad"
+                    value={phoneNumber}
+                    onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
+                  />
+                </>
+              ) : null}
+
+              <TextInput
+                placeholder="Email address"
+                placeholderTextColor="#4C5D7C"
+                style={styles.input}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+
+              <TextInput
+                placeholder="Password"
+                placeholderTextColor="#4C5D7C"
+                style={styles.input}
+                secureTextEntry
+                autoCapitalize="none"
+                value={password}
+                onChangeText={setPassword}
+              />
+
+              <Text style={styles.helperText}>
+                {mode === "signup"
+                  ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
+                  : "Use the email and password you registered with."}
+              </Text>
+
+              {submitError ? (
+                <View style={styles.errorCard}>
+                  <Text style={styles.errorText}>{submitError}</Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.buttonText}>
+                  {isSubmitting
+                    ? "Please wait..."
+                    : mode === "signup"
+                      ? "Create Account"
+                      : "Login"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -244,6 +249,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingTop: 72,
     paddingBottom: 40,
+  },
+  scrollContentDesktop: {
+    paddingTop: 40,
+    paddingBottom: 56,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 760,
   },
   loadingState: {
     flex: 1,
@@ -290,11 +306,18 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 8,
   },
+  titleDesktop: {
+    fontSize: 38,
+  },
   subtitle: {
     color: "#93A1BC",
     fontSize: 18,
     textAlign: "center",
     lineHeight: 28,
+  },
+  subtitleDesktop: {
+    fontSize: 17,
+    lineHeight: 26,
   },
   card: {
     borderRadius: 28,
@@ -303,6 +326,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7, 21, 46, 0.72)",
     paddingHorizontal: 26,
     paddingVertical: 30,
+  },
+  cardDesktop: {
+    paddingHorizontal: 24,
+    paddingVertical: 26,
   },
   modeRow: {
     flexDirection: "row",

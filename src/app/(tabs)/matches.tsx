@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -27,6 +28,7 @@ const filters: { key: MatchFilter; label: string }[] = [
 
 export default function MatchesTab() {
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
   const [activeFilter, setActiveFilter] = useState<MatchFilter>("upcoming");
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [predictions, setPredictions] = useState<Record<string, PredictionRecord>>({});
@@ -88,7 +90,8 @@ export default function MatchesTab() {
       ? sections.today[0] ?? sections.upcoming[0] ?? null
       : activeFilter === "live"
         ? sections.live[0] ?? null
-        : sections.completed[0] ?? null;
+      : sections.completed[0] ?? null;
+  const isDesktop = width >= 1024;
 
   const remainingMatches = featuredMatch
     ? activeMatches.filter((match) => match.id !== featuredMatch.id)
@@ -107,16 +110,20 @@ export default function MatchesTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
         <View style={styles.header}>
           <Text style={styles.title}>IPL 2024 Schedule</Text>
         </View>
 
-        <View style={styles.filterRow}>
+        <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
           {filters.map((filter) => (
             <Pressable
               key={filter.key}
-              style={styles.filterItem}
+              style={[styles.filterItem, isDesktop && styles.filterItemDesktop]}
               onPress={() => setActiveFilter(filter.key)}
             >
               <Text
@@ -178,6 +185,7 @@ export default function MatchesTab() {
             ))}
           </View>
         ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -298,8 +306,11 @@ function TeamBadge({ code, compact = false }: { code: string; compact?: boolean 
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+
   return (
-    <View style={styles.sectionHeader}>
+    <View style={[styles.sectionHeader, isDesktop && styles.sectionHeaderDesktop]}>
       <Text style={styles.sectionHeaderTitle}>{title}</Text>
       <View style={styles.countChip}>
         <Text style={styles.countChipText}>
@@ -485,6 +496,16 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 40,
   },
+  contentDesktop: {
+    paddingTop: 12,
+  },
+  pageShell: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  pageShellDesktop: {
+    maxWidth: 1040,
+  },
   loadingState: {
     flex: 1,
     alignItems: "center",
@@ -516,11 +537,19 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1B2943",
     paddingHorizontal: 24,
   },
+  filterRowDesktop: {
+    alignSelf: "flex-start",
+    gap: 12,
+  },
   filterItem: {
     marginRight: 32,
     paddingTop: 18,
     paddingBottom: 12,
     alignItems: "center",
+  },
+  filterItemDesktop: {
+    marginRight: 0,
+    minWidth: 108,
   },
   filterLabel: {
     color: "#7485A8",
@@ -544,6 +573,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 14,
+  },
+  sectionHeaderDesktop: {
+    gap: 20,
   },
   sectionHeaderTitle: {
     color: "#6F7F9F",

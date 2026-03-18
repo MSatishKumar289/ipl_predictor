@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Image, StyleSheet } from "react-native";
+import { Image, StyleSheet, useWindowDimensions } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -13,6 +13,9 @@ const tabIcons = {
 
 export default function TabsLayout() {
   const { isLoading, user } = useAuth();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+  const desktopTabBarWidth = Math.min(width - 32, 960);
 
   if (isLoading) {
     return null;
@@ -28,12 +31,25 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#1E5AE0",
         tabBarInactiveTintColor: "#93A1BC",
+        sceneStyle: {
+          backgroundColor: "#0A1325",
+        },
         tabBarStyle: {
           backgroundColor: "#0C1831",
           borderTopColor: "#20324F",
           height: 72,
           paddingTop: 8,
           paddingBottom: 10,
+          ...(isDesktop
+            ? {
+                width: desktopTabBarWidth,
+                alignSelf: "center",
+                borderWidth: 1,
+                borderColor: "#20324F",
+                borderRadius: 18,
+                marginBottom: 12,
+              }
+            : null),
         },
         tabBarLabelStyle: {
           fontSize: 12,
