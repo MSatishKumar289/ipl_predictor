@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -15,6 +16,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { createDemoMatches } from "@/lib/demoMatches";
 import {
   createMatch,
   formatMatchDate,
@@ -24,6 +26,13 @@ import {
 } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { useAuth } from "@/providers/AuthProvider";
+
+type PendingSettlement = {
+  matchId: string;
+  winner: "teamA" | "teamB" | "no_result";
+  matchLabel: string;
+  outcomeLabel: string;
+} | null;
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -39,6 +48,7 @@ export default function AdminScreen() {
   const [matchDate, setMatchDate] = useState("");
   const [matchTime, setMatchTime] = useState("");
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
+  const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -49,7 +59,10 @@ export default function AdminScreen() {
     return unsubscribe;
   }, []);
 
-  const recentMatches = useMemo(() => [...matches].reverse(), [matches]);
+  const recentMatches = useMemo(() => {
+    const source = matches.length ? matches : createDemoMatches();
+    return [...source].reverse();
+  }, [matches]);
 
   if (isAuthLoading) {
     return (
@@ -137,25 +150,18 @@ export default function AdminScreen() {
     }
   }
 
-  async function handleSetOutcome(matchId: string, winner: "teamA" | "teamB" | "no_result") {
-    const label =
-      winner === "no_result" ? "no result" : winner === "teamA" ? "Team A win" : "Team B win";
-
-    Alert.alert("Confirm and settle", `Set this match outcome as ${label} and settle now?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Confirm",
-        onPress: async () => {
-          try {
-            await settleMatchOutcome(matchId, winner, adminUserId);
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : "Unable to settle the match result.";
-            Alert.alert("Settlement failed", message);
-          }
-        },
-      },
-    ]);
+  function handleSetOutcome(match: MatchRecord, winner: "teamA" | "teamB" | "no_result") {
+    setPendingSettlement({
+      matchId: match.id,
+      winner,
+      matchLabel: `${match.teamAShort} vs ${match.teamBShort}`,
+      outcomeLabel:
+        winner === "no_result"
+          ? "No Result"
+          : winner === "teamA"
+            ? match.teamAShort
+            : match.teamBShort,
+    });
   }
 
   async function handleToggleEditing(matchId: string, nextValue: boolean) {
@@ -165,6 +171,21 @@ export default function AdminScreen() {
       const message =
         error instanceof Error ? error.message : "Unable to update editing settings.";
       Alert.alert("Update failed", message);
+    }
+  }
+
+  async function confirmSettlement() {
+    if (!pendingSettlement) {
+      return;
+    }
+
+    try {
+      await settleMatchOutcome(pendingSettlement.matchId, pendingSettlement.winner, adminUserId);
+      setPendingSettlement(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to settle the match result.";
+      Alert.alert("Settlement failed", message);
     }
   }
 
@@ -179,8 +200,25 @@ export default function AdminScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Admin</Text>
-          <Text style={styles.subtitle}>Create fixtures and update the final result.</Text>
+          <View style={styles.headerRow}>
+            <Pressable
+              style={styles.backButton}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/(tabs)/profile");
+              }}
+            >
+              <Text style={styles.backButtonText}>Back</Text>
+            </Pressable>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.title}>Admin</Text>
+              <Text style={styles.subtitle}>Create fixtures and update the final result.</Text>
+            </View>
+          </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Create Match</Text>
@@ -263,6 +301,11 @@ export default function AdminScreen() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Manage Live Matches</Text>
+            {!matches.length ? (
+              <View style={styles.demoBanner}>
+                <Text style={styles.demoBannerText}>Showing demo matches for UI testing.</Text>
+              </View>
+            ) : null}
             {isLoadingMatches ? (
               <View style={styles.loadingState}>
                 <ActivityIndicator size="small" color="#1E5AE0" />
@@ -270,13 +313,21 @@ export default function AdminScreen() {
             ) : recentMatches.length ? (
               recentMatches.map((match) => (
                 <View key={match.id} style={styles.matchRow}>
+                  {(() => {
+                    const settlementLocked =
+                      match.status === "settled" ||
+                      match.status === "no_result" ||
+                      match.status === "completed";
+
+                    return (
+                      <>
                   <View style={styles.matchSummary}>
                     <Text style={styles.matchName}>
                       Match {match.matchNumber}: {match.teamAShort} vs {match.teamBShort}
                     </Text>
                     <Text style={styles.matchMeta}>
-                      {formatMatchDate(match.startAt)} | Current:{" "}
-                      {match.winner ? match.winner.replace("_", " ") : "pending"}
+                      {formatMatchDate(match.startAt)} | Winner:{" "}
+                      {formatWinner(match)}
                     </Text>
                   </View>
 
@@ -297,24 +348,45 @@ export default function AdminScreen() {
 
                   <View style={styles.actionRow}>
                     <Pressable
-                      style={styles.actionButton}
-                      onPress={() => handleSetOutcome(match.id, "teamA")}
+                      style={[
+                        styles.actionButton,
+                        settlementLocked && styles.actionButtonDisabled,
+                      ]}
+                      onPress={() => handleSetOutcome(match, "teamA")}
+                      disabled={settlementLocked}
                     >
                       <Text style={styles.actionButtonText}>{match.teamAShort}</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.actionButton}
-                      onPress={() => handleSetOutcome(match.id, "teamB")}
+                      style={[
+                        styles.actionButton,
+                        settlementLocked && styles.actionButtonDisabled,
+                      ]}
+                      onPress={() => handleSetOutcome(match, "teamB")}
+                      disabled={settlementLocked}
                     >
                       <Text style={styles.actionButtonText}>{match.teamBShort}</Text>
                     </Pressable>
                     <Pressable
-                      style={styles.actionButtonAlt}
-                      onPress={() => handleSetOutcome(match.id, "no_result")}
+                      style={[
+                        styles.actionButtonAlt,
+                        settlementLocked && styles.actionButtonDisabled,
+                      ]}
+                      onPress={() => handleSetOutcome(match, "no_result")}
+                      disabled={settlementLocked}
                     >
                       <Text style={styles.actionButtonText}>No Result</Text>
                     </Pressable>
                   </View>
+
+                  {settlementLocked ? (
+                    <Text style={styles.lockedActionsText}>
+                      Result already recorded. Settlement actions are disabled.
+                    </Text>
+                  ) : null}
+                      </>
+                    );
+                  })()}
                 </View>
               ))
             ) : (
@@ -323,8 +395,55 @@ export default function AdminScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={!!pendingSettlement}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingSettlement(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setPendingSettlement(null)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Confirm Match Result</Text>
+            <Text style={styles.confirmText}>
+              Set result for {pendingSettlement?.matchLabel || "this match"} as{" "}
+              {pendingSettlement?.outcomeLabel || "selected outcome"}?
+            </Text>
+            <Text style={styles.confirmHint}>
+              This will run settlement for all predictions on that match.
+            </Text>
+
+            <Pressable style={styles.confirmPrimaryButton} onPress={confirmSettlement}>
+              <Text style={styles.confirmPrimaryButtonText}>Confirm Settlement</Text>
+            </Pressable>
+            <Pressable
+              style={styles.confirmSecondaryButton}
+              onPress={() => setPendingSettlement(null)}
+            >
+              <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
+}
+
+function formatWinner(match: MatchRecord) {
+  if (match.winner === "teamA") {
+    return match.teamAShort;
+  }
+
+  if (match.winner === "teamB") {
+    return match.teamBShort;
+  }
+
+  if (match.winner === "no_result") {
+    return "No Result";
+  }
+
+  return "Yet to start";
 }
 
 const styles = StyleSheet.create({
@@ -340,10 +459,35 @@ const styles = StyleSheet.create({
     paddingTop: 48,
     gap: 22,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  headerTextWrap: {
+    flex: 1,
+    gap: 6,
+  },
   loadingState: {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 64,
+  },
+  backButton: {
+    minWidth: 74,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#102042",
+    borderWidth: 1,
+    borderColor: "#223A63",
+    marginTop: 2,
+  },
+  backButtonText: {
+    color: "#DDE5F7",
+    fontSize: 15,
+    fontWeight: "700",
   },
   title: {
     color: "#F5F7FB",
@@ -354,6 +498,19 @@ const styles = StyleSheet.create({
     color: "#93A1BC",
     fontSize: 16,
     lineHeight: 24,
+  },
+  demoBanner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#2C4C8F",
+    backgroundColor: "#102347",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  demoBannerText: {
+    color: "#A8C4FF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   card: {
     borderRadius: 24,
@@ -466,6 +623,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  actionButtonDisabled: {
+    opacity: 0.45,
+  },
+  lockedActionsText: {
+    color: "#F9B17A",
+    fontSize: 13,
+    lineHeight: 20,
+  },
   blockedCard: {
     margin: 24,
     marginTop: 80,
@@ -503,5 +668,62 @@ const styles = StyleSheet.create({
     color: "#9FB0CF",
     fontSize: 15,
     lineHeight: 22,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "rgba(3, 10, 20, 0.62)",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  confirmCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#102042",
+    padding: 22,
+    gap: 14,
+  },
+  confirmTitle: {
+    color: "#F7FAFF",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  confirmText: {
+    color: "#DDE5F7",
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  confirmHint: {
+    color: "#93A1BC",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  confirmPrimaryButton: {
+    marginTop: 6,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1E5AE0",
+  },
+  confirmPrimaryButtonText: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  confirmSecondaryButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1B2740",
+  },
+  confirmSecondaryButtonText: {
+    color: "#DDE5F7",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });
