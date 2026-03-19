@@ -19,7 +19,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/providers/AuthProvider";
 import { createDemoMatches } from "@/lib/demoMatches";
 import { formatMatchDate, isMatchLocked, subscribeToMatch } from "@/lib/matches";
-import { placeOrEditPrediction, subscribeToMatchPredictions, subscribeToUserPrediction } from "@/lib/predictions";
+import {
+  placeOrEditPrediction,
+  subscribeToMatchPredictions,
+  subscribeToUserPrediction,
+} from "@/lib/predictions";
 import type { MatchRecord } from "@/lib/match-types";
 import type { PredictionSelection, PredictionRecord } from "@/lib/prediction-types";
 
@@ -41,11 +45,20 @@ export default function MatchDetailScreen() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
+  const [isSuccessVisible, setIsSuccessVisible] = useState(false);
+  const [successTitle, setSuccessTitle] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) {
       return;
     }
+
+    setSelection("teamA");
+    setAmount("");
+    setIsConfirmVisible(false);
+    setIsSuccessVisible(false);
 
     if (id.startsWith("demo-")) {
       const demoMatch = createDemoMatches().find((entry) => entry.id === id) ?? null;
@@ -74,7 +87,22 @@ export default function MatchDetailScreen() {
   }, [id]);
 
   useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+
+    return () => clearTimeout(timeoutId);
+  }, [toastMessage]);
+
+  useEffect(() => {
     if (!id || !user || id.startsWith("demo-")) {
+      setPrediction(null);
+      setSelection("teamA");
+      setAmount("");
       return;
     }
 
@@ -84,10 +112,8 @@ export default function MatchDetailScreen() {
       (nextPrediction) => {
         setPrediction(nextPrediction);
         setPredictionError(null);
-        if (nextPrediction) {
-          setSelection(nextPrediction.selectedTeam);
-          setAmount(String(nextPrediction.amount));
-        }
+        setSelection(nextPrediction?.selectedTeam ?? "teamA");
+        setAmount(nextPrediction ? String(nextPrediction.amount) : "");
       },
       (error) => {
         setPredictionError(`Your prediction read failed: ${error.message}`);
@@ -204,6 +230,8 @@ export default function MatchDetailScreen() {
     setIsSubmitting(true);
 
     try {
+      const isEditingPrediction = !!prediction;
+
       await placeOrEditPrediction({
         match: currentMatch,
         userId: currentUserId,
@@ -211,15 +239,24 @@ export default function MatchDetailScreen() {
         selection,
         amount: parsedAmount,
       });
+
       setIsConfirmVisible(false);
-      Alert.alert(
-        prediction ? "Prediction updated" : "Prediction placed",
-        prediction
-          ? "Your old bet was reversed and the new one is now active."
+      setSuccessTitle(isEditingPrediction ? "Prediction Updated" : "Prediction Placed");
+      setSuccessMessage(
+        isEditingPrediction
+          ? "Your old bet was reversed and the updated pick is now active."
           : "Your prediction is now active for this match."
       );
+      setIsSuccessVisible(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save prediction.";
+
+      if (message === "Predictions are locked for this match.") {
+        setIsConfirmVisible(false);
+        setToastMessage("Sorry, your bet could not be placed as the match was locked.");
+        return;
+      }
+
       Alert.alert("Prediction failed", message);
     } finally {
       setIsSubmitting(false);
@@ -475,6 +512,47 @@ export default function MatchDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={isSuccessVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setIsSuccessVisible(false);
+        }}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>{successTitle}</Text>
+            <Text style={styles.successText}>{successMessage}</Text>
+
+            <Pressable
+              style={styles.successButton}
+              onPress={() => {
+                setIsSuccessVisible(false);
+                router.replace("/(tabs)/my-bets");
+              }}
+            >
+              <Text style={styles.successButtonText}>Go to My Bets</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.successSecondaryButton}
+              onPress={() => setIsSuccessVisible(false)}
+            >
+              <Text style={styles.successSecondaryButtonText}>Stay Here</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {toastMessage ? (
+        <View pointerEvents="none" style={styles.toastWrap}>
+          <View style={styles.toastCard}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -891,5 +969,79 @@ const styles = StyleSheet.create({
     color: "#D7E1F5",
     fontSize: 17,
     fontWeight: "700",
+  },
+  successOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "rgba(3, 10, 20, 0.72)",
+  },
+  successCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#101A31",
+    padding: 24,
+    gap: 16,
+  },
+  successTitle: {
+    color: "#F7FAFF",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  successText: {
+    color: "#AFC0DE",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  successButton: {
+    height: 56,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2463EB",
+  },
+  successButtonText: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  successSecondaryButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1B2740",
+  },
+  successSecondaryButtonText: {
+    color: "#D7E1F5",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  toastWrap: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 24,
+    alignItems: "center",
+  },
+  toastCard: {
+    maxWidth: 420,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#7A5A1A",
+    backgroundColor: "#2E2210",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  toastText: {
+    color: "#F6D6A0",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    fontWeight: "600",
   },
 });
