@@ -14,6 +14,9 @@ export default function ProfileTab() {
   async function handleLogout() {
     try {
       await logout();
+      if (router.canDismiss()) {
+        router.dismissAll();
+      }
       router.replace("/");
     } catch (logoutError) {
       const message = logoutError instanceof Error ? logoutError.message : "Unable to sign out.";

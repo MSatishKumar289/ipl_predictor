@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 
-import { ensureUserProfile, subscribeToAuth } from "@/lib/auth";
+import { ensureUserProfile, subscribeToAuth, subscribeToUserProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth-types";
 
 type AuthContextValue = {
@@ -20,7 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (nextUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = subscribeToAuth(async (nextUser) => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = null;
       setUser(nextUser);
 
       if (!nextUser) {
@@ -33,10 +37,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        const nextProfile = await ensureUserProfile(nextUser, {
+        await ensureUserProfile(nextUser, {
           grantSignupBonusIfNew: true,
         });
-        setProfile(nextProfile as UserProfile | null);
+
+        unsubscribeProfile = subscribeToUserProfile(
+          nextUser.uid,
+          (nextProfile) => {
+            setProfile(nextProfile);
+            setError(null);
+            setIsLoading(false);
+          },
+          (profileError) => {
+            const message =
+              profileError instanceof Error
+                ? profileError.message
+                : "Unable to subscribe to user profile.";
+
+            setProfile(null);
+            setError(`Profile read failed: ${message}`);
+            setIsLoading(false);
+          }
+        );
       } catch (authError) {
         const message =
           authError instanceof Error ? authError.message : "Unable to load user profile.";
@@ -48,7 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeProfile?.();
+      unsubscribeAuth();
+    };
   }, []);
 
   const value = useMemo(

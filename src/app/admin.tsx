@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -25,6 +26,7 @@ import {
   subscribeToMatches,
   updateMatchSettings,
 } from "@/lib/matches";
+import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/ipl-teams";
 import type { MatchRecord } from "@/lib/match-types";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -35,6 +37,8 @@ type PendingSettlement = {
   outcomeLabel: string;
 } | null;
 
+type PickerMode = "date" | "time" | null;
+
 export default function AdminScreen() {
   const router = useRouter();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
@@ -43,14 +47,16 @@ export default function AdminScreen() {
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [matchNumber, setMatchNumber] = useState("");
-  const [teamAName, setTeamAName] = useState("");
-  const [teamBName, setTeamBName] = useState("");
-  const [teamAShort, setTeamAShort] = useState("");
-  const [teamBShort, setTeamBShort] = useState("");
+  const [teamAId, setTeamAId] = useState<IplTeamId | null>(null);
+  const [teamBId, setTeamBId] = useState<IplTeamId | null>(null);
   const [matchDate, setMatchDate] = useState("");
   const [matchTime, setMatchTime] = useState("");
+  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
+  const [pickerValue, setPickerValue] = useState(new Date());
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
   const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
+  const [createMatchError, setCreateMatchError] = useState<string | null>(null);
+  const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -65,6 +71,8 @@ export default function AdminScreen() {
     const source = matches.length ? matches : createDemoMatches();
     return [...source].reverse();
   }, [matches]);
+  const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
+  const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
   const isDesktop = width >= 1024;
 
   if (isAuthLoading) {
@@ -101,22 +109,34 @@ export default function AdminScreen() {
   const adminUserId = user.uid;
 
   async function handleCreateMatch() {
+    setCreateMatchError(null);
+    setCreateMatchSuccess(null);
+
     if (
       !matchNumber.trim() ||
-      !teamAName.trim() ||
-      !teamBName.trim() ||
-      !teamAShort.trim() ||
-      !teamBShort.trim() ||
+      !selectedTeamA ||
+      !selectedTeamB ||
       !matchDate.trim() ||
       !matchTime.trim()
     ) {
-      Alert.alert("Missing details", "Fill in all match fields before creating the fixture.");
+      const message = "Fill in all match fields before creating the fixture.";
+      setCreateMatchError(message);
+      Alert.alert("Missing details", message);
+      return;
+    }
+
+    if (selectedTeamA.id === selectedTeamB.id) {
+      const message = "Team A and Team B must be different teams.";
+      setCreateMatchError(message);
+      Alert.alert("Choose two teams", message);
       return;
     }
 
     const startAt = new Date(`${matchDate}T${matchTime}:00+05:30`);
     if (Number.isNaN(startAt.getTime())) {
-      Alert.alert("Invalid date", "Use YYYY-MM-DD for date and HH:MM in 24-hour format.");
+      const message = "Use YYYY-MM-DD for date and HH:MM in 24-hour format.";
+      setCreateMatchError(message);
+      Alert.alert("Invalid date", message);
       return;
     }
 
@@ -126,10 +146,10 @@ export default function AdminScreen() {
       await createMatch(
         {
           matchNumber: Number(matchNumber),
-          teamAName,
-          teamBName,
-          teamAShort,
-          teamBShort,
+          teamAName: selectedTeamA.name,
+          teamBName: selectedTeamB.name,
+          teamAShort: selectedTeamA.shortCode,
+          teamBShort: selectedTeamB.shortCode,
           startAt: startAt.toISOString(),
           isEditableBeforeLock,
         },
@@ -137,16 +157,16 @@ export default function AdminScreen() {
       );
 
       setMatchNumber("");
-      setTeamAName("");
-      setTeamBName("");
-      setTeamAShort("");
-      setTeamBShort("");
+      setTeamAId(null);
+      setTeamBId(null);
       setMatchDate("");
       setMatchTime("");
       setIsEditableBeforeLock(true);
+      setCreateMatchSuccess("Match created successfully. The fixture is now live.");
       Alert.alert("Match created", "The fixture is now live in the matches list.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create match.";
+      setCreateMatchError(message);
       Alert.alert("Create failed", message);
     } finally {
       setIsSubmitting(false);
@@ -192,6 +212,35 @@ export default function AdminScreen() {
     }
   }
 
+  function openPicker(mode: Exclude<PickerMode, null>) {
+    const seed = buildPickerSeed(matchDate, matchTime);
+    setPickerValue(seed);
+    setPickerMode(mode);
+  }
+
+  function handlePickerChange(nextValue?: Date) {
+    if (!nextValue) {
+      setPickerMode(null);
+      return;
+    }
+
+    if (pickerMode === "date") {
+      setMatchDate(formatDateValue(nextValue));
+    }
+
+    if (pickerMode === "time") {
+      setMatchTime(formatTimeValue(nextValue));
+    }
+
+    setPickerValue(nextValue);
+    setPickerMode(null);
+  }
+
+  const NativeDateTimePicker =
+    Platform.OS === "web"
+      ? null
+      : (require("@react-native-community/datetimepicker").default as any);
+
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView
@@ -236,48 +285,88 @@ export default function AdminScreen() {
                 value={matchNumber}
                 onChangeText={(value) => setMatchNumber(value.replace(/[^0-9]/g, ""))}
               />
-              <TextInput
-                style={styles.input}
-                placeholder="Team A name"
-                placeholderTextColor="#4C5D7C"
-                value={teamAName}
-                onChangeText={setTeamAName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Team A short code"
-                placeholderTextColor="#4C5D7C"
-                value={teamAShort}
-                onChangeText={setTeamAShort}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Team B name"
-                placeholderTextColor="#4C5D7C"
-                value={teamBName}
-                onChangeText={setTeamBName}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Team B short code"
-                placeholderTextColor="#4C5D7C"
-                value={teamBShort}
-                onChangeText={setTeamBShort}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Match date (YYYY-MM-DD)"
-                placeholderTextColor="#4C5D7C"
-                value={matchDate}
-                onChangeText={setMatchDate}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Match time (HH:MM, 24h)"
-                placeholderTextColor="#4C5D7C"
-                value={matchTime}
-                onChangeText={setMatchTime}
-              />
+              <View style={styles.selectorSection}>
+                <Text style={styles.selectorLabel}>Team A</Text>
+                <View style={styles.teamGrid}>
+                  {IPL_TEAMS.map((team) => (
+                    <TeamOptionCard
+                      key={`team-a-${team.id}`}
+                      team={team}
+                      isSelected={teamAId === team.id}
+                      isDisabled={teamBId === team.id}
+                      isDesktop={isDesktop}
+                      onPress={() => setTeamAId(team.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.selectorSection}>
+                <Text style={styles.selectorLabel}>Team B</Text>
+                <View style={styles.teamGrid}>
+                  {IPL_TEAMS.map((team) => (
+                    <TeamOptionCard
+                      key={`team-b-${team.id}`}
+                      team={team}
+                      isSelected={teamBId === team.id}
+                      isDisabled={teamAId === team.id}
+                      isDesktop={isDesktop}
+                      onPress={() => setTeamBId(team.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.selectionSummaryCard}>
+                <Text style={styles.selectionSummaryTitle}>Selected Teams</Text>
+                <Text style={styles.selectionSummaryText}>
+                  {selectedTeamA ? `${selectedTeamA.name} (${selectedTeamA.shortCode})` : "Choose Team A"}
+                </Text>
+                <Text style={styles.selectionSummaryText}>
+                  {selectedTeamB ? `${selectedTeamB.name} (${selectedTeamB.shortCode})` : "Choose Team B"}
+                </Text>
+              </View>
+
+              {createMatchError ? (
+                <View style={styles.formMessageError}>
+                  <Text style={styles.formMessageErrorText}>{createMatchError}</Text>
+                </View>
+              ) : null}
+
+              {createMatchSuccess ? (
+                <View style={styles.formMessageSuccess}>
+                  <Text style={styles.formMessageSuccessText}>{createMatchSuccess}</Text>
+                </View>
+              ) : null}
+              {Platform.OS === "web" ? (
+                <>
+                  <WebDateTimeInput
+                    type="date"
+                    value={matchDate}
+                    onChange={setMatchDate}
+                    placeholder="Match date"
+                  />
+                  <WebDateTimeInput
+                    type="time"
+                    value={matchTime}
+                    onChange={setMatchTime}
+                    placeholder="Match time"
+                  />
+                </>
+              ) : (
+                <>
+                  <Pressable style={styles.inputButton} onPress={() => openPicker("date")}>
+                    <Text style={[styles.inputButtonText, !matchDate && styles.placeholderText]}>
+                      {matchDate || "Select match date"}
+                    </Text>
+                  </Pressable>
+                  <Pressable style={styles.inputButton} onPress={() => openPicker("time")}>
+                    <Text style={[styles.inputButtonText, !matchTime && styles.placeholderText]}>
+                      {matchTime || "Select match time"}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
 
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextWrap}>
@@ -433,8 +522,94 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+
+      {NativeDateTimePicker && pickerMode ? (
+        <NativeDateTimePicker
+          value={pickerValue}
+          mode={pickerMode}
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          is24Hour
+          onChange={(event: { type?: string }, date?: Date) => {
+            if (event.type === "dismissed") {
+              setPickerMode(null);
+              return;
+            }
+
+            handlePickerChange(date);
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
+}
+
+function buildPickerSeed(dateValue: string, timeValue: string) {
+  if (dateValue && timeValue) {
+    const combined = new Date(`${dateValue}T${timeValue}:00+05:30`);
+    if (!Number.isNaN(combined.getTime())) {
+      return combined;
+    }
+  }
+
+  if (dateValue) {
+    const dateOnly = new Date(`${dateValue}T12:00:00+05:30`);
+    if (!Number.isNaN(dateOnly.getTime())) {
+      return dateOnly;
+    }
+  }
+
+  return new Date();
+}
+
+function formatDateValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimeValue(value: Date) {
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function WebDateTimeInput({
+  type,
+  value,
+  onChange,
+  placeholder,
+}: {
+  type: "date" | "time";
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  if (Platform.OS !== "web") {
+    return null;
+  }
+
+  return createElement("input", {
+    type,
+    value,
+    placeholder,
+    onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+    style: {
+      width: "100%",
+      height: 56,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderStyle: "solid",
+      borderColor: "#334C76",
+      backgroundColor: "#162645",
+      paddingLeft: 16,
+      paddingRight: 16,
+      color: "#F7FAFF",
+      fontSize: 16,
+      outline: "none",
+      boxSizing: "border-box",
+    },
+  });
 }
 
 function formatWinner(match: MatchRecord) {
@@ -451,6 +626,43 @@ function formatWinner(match: MatchRecord) {
   }
 
   return "Yet to start";
+}
+
+function TeamOptionCard({
+  team,
+  isSelected,
+  isDisabled,
+  isDesktop,
+  onPress,
+}: {
+  team: IplTeam;
+  isSelected: boolean;
+  isDisabled: boolean;
+  isDesktop: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[
+        styles.teamOption,
+        isDesktop ? styles.teamOptionDesktop : styles.teamOptionMobile,
+        isSelected && styles.teamOptionSelected,
+        isDisabled && styles.teamOptionDisabled,
+      ]}
+      onPress={onPress}
+      disabled={isDisabled}
+    >
+      <Image source={team.logo} style={styles.teamLogo} resizeMode="contain" />
+      <View style={styles.teamTextWrap}>
+        <Text style={[styles.teamCode, isSelected && styles.teamCodeSelected]}>
+          {team.shortCode}
+        </Text>
+        <Text style={styles.teamNameLabel} numberOfLines={2}>
+          {team.name}
+        </Text>
+      </View>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -564,6 +776,125 @@ const styles = StyleSheet.create({
     height: 56,
     color: "#F7FAFF",
     fontSize: 16,
+  },
+  selectorSection: {
+    gap: 10,
+  },
+  selectorLabel: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  teamGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  teamOption: {
+    minHeight: 74,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#334C76",
+    backgroundColor: "#162645",
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  teamOptionDesktop: {
+    width: "19%",
+  },
+  teamOptionMobile: {
+    width: "48%",
+  },
+  teamOptionSelected: {
+    borderColor: "#1E5AE0",
+    backgroundColor: "#18315E",
+  },
+  teamOptionDisabled: {
+    opacity: 0.4,
+  },
+  teamLogo: {
+    width: "40%",
+    height: 32,
+  },
+  teamTextWrap: {
+    width: "60%",
+    gap: 1,
+  },
+  teamCode: {
+    color: "#DDE5F7",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  teamCodeSelected: {
+    color: "#F7FAFF",
+  },
+  teamNameLabel: {
+    color: "#9FB0CF",
+    fontSize: 9,
+    lineHeight: 11,
+  },
+  selectionSummaryCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    padding: 16,
+    gap: 6,
+  },
+  selectionSummaryTitle: {
+    color: "#F7FAFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  selectionSummaryText: {
+    color: "#9FB0CF",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  formMessageError: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#7A2A2A",
+    backgroundColor: "#311515",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  formMessageErrorText: {
+    color: "#F0B3B3",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  formMessageSuccess: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2B7B57",
+    backgroundColor: "#123325",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  formMessageSuccessText: {
+    color: "#BEEFD5",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inputButton: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#334C76",
+    backgroundColor: "#162645",
+    paddingHorizontal: 16,
+    height: 56,
+    justifyContent: "center",
+  },
+  inputButtonText: {
+    color: "#F7FAFF",
+    fontSize: 16,
+  },
+  placeholderText: {
+    color: "#4C5D7C",
   },
   toggleRow: {
     flexDirection: "row",

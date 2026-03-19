@@ -24,6 +24,31 @@ type EnrichedBet = PredictionRecord & {
   match: MatchRecord | null;
 };
 
+function getTimestampValue(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (typeof value === "object" && "toMillis" in value && typeof value.toMillis === "function") {
+    return value.toMillis();
+  }
+
+  if (
+    typeof value === "object" &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return 0;
+}
+
 const filters: { key: BetFilter; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "settled", label: "Settled" },
@@ -126,9 +151,11 @@ export default function MyBetsTab() {
           match: displayMatches.find((match) => match.id === prediction.matchId) ?? null,
         }))
         .sort((left, right) => {
-          const leftDate = left.settledAt ?? left.updatedAt ?? left.createdAt ?? "";
-          const rightDate = right.settledAt ?? right.updatedAt ?? right.createdAt ?? "";
-          return rightDate.localeCompare(leftDate);
+          const leftDate = getTimestampValue(left.settledAt ?? left.updatedAt ?? left.createdAt);
+          const rightDate = getTimestampValue(
+            right.settledAt ?? right.updatedAt ?? right.createdAt
+          );
+          return rightDate - leftDate;
         }),
     [displayMatches, displayPredictions]
   );
