@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Image, StyleSheet, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -18,7 +18,12 @@ export default function TabsLayout() {
   const desktopTabBarWidth = Math.min(width - 32, 960);
 
   if (isLoading) {
-    return null;
+    return (
+      <View style={styles.transitionScreen}>
+        <ActivityIndicator size="large" color="#1E5AE0" />
+        <Text style={styles.transitionText}>Loading account...</Text>
+      </View>
+    );
   }
 
   if (!user) {
@@ -123,6 +128,19 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  transitionScreen: {
+    flex: 1,
+    backgroundColor: "#0A1325",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  transitionText: {
+    color: "#DDE5F7",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   icon: {
     width: 18,
     height: 18,

@@ -18,7 +18,6 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { createDemoMatches } from "@/lib/demoMatches";
 import {
   createMatch,
   formatMatchDate,
@@ -68,8 +67,7 @@ export default function AdminScreen() {
   }, []);
 
   const recentMatches = useMemo(() => {
-    const source = matches.length ? matches : createDemoMatches();
-    return [...source].reverse();
+    return [...matches].reverse();
   }, [matches]);
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
@@ -396,11 +394,6 @@ export default function AdminScreen() {
 
           <View style={[styles.card, isDesktop && styles.cardDesktop]}>
             <Text style={styles.cardTitle}>Manage Live Matches</Text>
-            {!matches.length ? (
-              <View style={styles.demoBanner}>
-                <Text style={styles.demoBannerText}>Showing demo matches for UI testing.</Text>
-              </View>
-            ) : null}
             {isLoadingMatches ? (
               <View style={styles.loadingState}>
                 <ActivityIndicator size="small" color="#1E5AE0" />
@@ -737,19 +730,6 @@ const styles = StyleSheet.create({
   subtitleDesktop: {
     fontSize: 15,
     lineHeight: 22,
-  },
-  demoBanner: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#2C4C8F",
-    backgroundColor: "#102347",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  demoBannerText: {
-    color: "#A8C4FF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   card: {
     borderRadius: 24,

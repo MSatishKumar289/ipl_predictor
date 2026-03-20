@@ -13,7 +13,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { signInWithEmail, signUpWithEmail } from "@/lib/auth";
@@ -22,7 +21,6 @@ import { useAuth } from "@/providers/AuthProvider";
 type AuthMode = "login" | "signup";
 
 const signupBonus = 50000;
-const authenticatedRoute = "/(tabs)/home" as Href;
 
 export default function HomeScreen() {
   const { isLoading, user } = useAuth();
@@ -76,8 +74,6 @@ export default function HomeScreen() {
           password,
         });
       }
-
-      router.replace(authenticatedRoute);
     } catch (error) {
       const message = getAuthErrorMessage(error);
       setSubmitError(message);

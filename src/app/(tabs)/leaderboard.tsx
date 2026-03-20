@@ -13,75 +13,6 @@ import { subscribeToLeaderboardUsers } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
 
-const demoUsers: UserProfileRecord[] = [
-  {
-    uid: "demo-1",
-    displayName: "Aarav",
-    email: "aarav@example.com",
-    role: "user",
-    balance: 64200,
-    points: 27,
-    wins: 9,
-    losses: 2,
-    totalPredictions: 11,
-  },
-  {
-    uid: "demo-2",
-    displayName: "Priya",
-    email: "priya@example.com",
-    role: "user",
-    balance: 58800,
-    points: 24,
-    wins: 8,
-    losses: 3,
-    totalPredictions: 11,
-  },
-  {
-    uid: "demo-3",
-    displayName: "Kavin",
-    email: "kavin@example.com",
-    role: "user",
-    balance: 53100,
-    points: 18,
-    wins: 6,
-    losses: 4,
-    totalPredictions: 10,
-  },
-  {
-    uid: "demo-4",
-    displayName: "Naren",
-    email: "naren@example.com",
-    role: "user",
-    balance: 49200,
-    points: 15,
-    wins: 5,
-    losses: 5,
-    totalPredictions: 10,
-  },
-  {
-    uid: "demo-5",
-    displayName: "Diya",
-    email: "diya@example.com",
-    role: "user",
-    balance: 46800,
-    points: 12,
-    wins: 4,
-    losses: 4,
-    totalPredictions: 8,
-  },
-  {
-    uid: "demo-6",
-    displayName: "Vikram",
-    email: "vikram@example.com",
-    role: "user",
-    balance: 45200,
-    points: 9,
-    wins: 3,
-    losses: 4,
-    totalPredictions: 7,
-  },
-];
-
 export default function LeaderboardTab() {
   const { user, profile } = useAuth();
   const { width } = useWindowDimensions();
@@ -107,16 +38,14 @@ export default function LeaderboardTab() {
   }, []);
 
   const isDesktop = width >= 1024;
-  const useDemoLeaderboard = !!error || !users.length;
-  const leaderboardUsers = useDemoLeaderboard ? demoUsers : users;
 
   const rankedUsers = useMemo(
     () =>
-      leaderboardUsers.map((entry, index) => ({
+      users.map((entry, index) => ({
         ...entry,
         rank: index + 1,
       })),
-    [leaderboardUsers]
+    [users]
   );
 
   const currentUserEntry = useMemo(() => {
@@ -128,21 +57,6 @@ export default function LeaderboardTab() {
 
     if (!user || !profile) {
       return null;
-    }
-
-    if (useDemoLeaderboard) {
-      return {
-        uid: user.uid,
-        rank: 5,
-        displayName: profile.displayName,
-        email: profile.email,
-        role: profile.role,
-        balance: profile.balance,
-        points: 14,
-        wins: 5,
-        losses: 4,
-        totalPredictions: 9,
-      };
     }
 
     return {
@@ -157,7 +71,7 @@ export default function LeaderboardTab() {
       losses: profile.losses,
       totalPredictions: profile.totalPredictions,
     };
-  }, [profile, rankedUsers, useDemoLeaderboard, user]);
+  }, [profile, rankedUsers, user]);
 
   const topThree = rankedUsers.slice(0, 3);
   const remainingUsers = rankedUsers.slice(3);
@@ -195,12 +109,6 @@ export default function LeaderboardTab() {
             </View>
           ) : null}
 
-          {useDemoLeaderboard ? (
-            <View style={styles.demoBanner}>
-              <Text style={styles.demoBannerText}>Showing demo leaderboard for UI testing.</Text>
-            </View>
-          ) : null}
-
           {currentUserEntry ? (
             <View style={styles.meCard}>
               <Text style={styles.meLabel}>Your Rank</Text>
@@ -217,52 +125,69 @@ export default function LeaderboardTab() {
             </View>
           ) : null}
 
-          <View style={[styles.podiumRow, isDesktop && styles.podiumRowDesktop]}>
-            {topThree.map((entry, index) => (
-              <View
-                key={entry.uid}
-                style={[
-                  styles.podiumCard,
-                  index === 0 && styles.podiumCardFirst,
-                  index === 1 && styles.podiumCardSecond,
-                  index === 2 && styles.podiumCardThird,
-                ]}
-              >
-                <Text style={styles.podiumRank}>#{entry.rank}</Text>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{getInitials(entry.displayName)}</Text>
-                </View>
-                <Text style={styles.podiumName}>{entry.displayName}</Text>
-                <Text style={styles.podiumPoints}>{entry.points} pts</Text>
-                <Text style={styles.podiumMeta}>
-                  {entry.wins}W / {entry.losses}L
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.listCard}>
-            <Text style={styles.listTitle}>Full Table</Text>
-            {remainingUsers.map((entry) => {
-              const isCurrentUser = user?.uid === entry.uid;
-
-              return (
-                <View key={entry.uid} style={[styles.row, isCurrentUser && styles.rowCurrentUser]}>
-                  <Text style={styles.rowRank}>#{entry.rank}</Text>
-                  <View style={styles.rowAvatar}>
-                    <Text style={styles.rowAvatarText}>{getInitials(entry.displayName)}</Text>
-                  </View>
-                  <View style={styles.rowBody}>
-                    <Text style={styles.rowName}>{entry.displayName}</Text>
-                    <Text style={styles.rowMeta}>
-                      {entry.wins}W - {entry.losses}L - {entry.totalPredictions} picks
+          {rankedUsers.length ? (
+            <>
+              <View style={[styles.podiumRow, isDesktop && styles.podiumRowDesktop]}>
+                {topThree.map((entry, index) => (
+                  <View
+                    key={entry.uid}
+                    style={[
+                      styles.podiumCard,
+                      index === 0 && styles.podiumCardFirst,
+                      index === 1 && styles.podiumCardSecond,
+                      index === 2 && styles.podiumCardThird,
+                    ]}
+                  >
+                    <Text style={styles.podiumRank}>#{entry.rank}</Text>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{getInitials(entry.displayName)}</Text>
+                    </View>
+                    <Text style={styles.podiumName}>{entry.displayName}</Text>
+                    <Text style={styles.podiumPoints}>{entry.points} pts</Text>
+                    <Text style={styles.podiumMeta}>
+                      {entry.wins}W / {entry.losses}L
                     </Text>
                   </View>
-                  <Text style={styles.rowPoints}>{entry.points}</Text>
-                </View>
-              );
-            })}
-          </View>
+                ))}
+              </View>
+
+              <View style={styles.listCard}>
+                <Text style={styles.listTitle}>Full Table</Text>
+                {remainingUsers.map((entry) => {
+                  const isCurrentUser = user?.uid === entry.uid;
+
+                  return (
+                    <View
+                      key={entry.uid}
+                      style={[styles.row, isCurrentUser && styles.rowCurrentUser]}
+                    >
+                      <Text style={styles.rowRank}>#{entry.rank}</Text>
+                      <View style={styles.rowAvatar}>
+                        <Text style={styles.rowAvatarText}>{getInitials(entry.displayName)}</Text>
+                      </View>
+                      <View style={styles.rowBody}>
+                        <Text style={styles.rowName}>{entry.displayName}</Text>
+                        <Text style={styles.rowMeta}>
+                          {entry.wins}W - {entry.losses}L - {entry.totalPredictions} picks
+                        </Text>
+                      </View>
+                      <Text style={styles.rowPoints}>{entry.points}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <View style={styles.listCard}>
+              <Text style={styles.listTitle}>Full Table</Text>
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No leaderboard data yet</Text>
+                <Text style={styles.emptyText}>
+                  Once users place and settle predictions, rankings will appear here.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -362,19 +287,6 @@ const styles = StyleSheet.create({
     color: "#F0B3B3",
     fontSize: 14,
     lineHeight: 20,
-  },
-  demoBanner: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#2C4C8F",
-    backgroundColor: "#102347",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  demoBannerText: {
-    color: "#A8C4FF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   meCard: {
     borderRadius: 22,
@@ -540,5 +452,21 @@ const styles = StyleSheet.create({
     color: "#7FB0FF",
     fontSize: 20,
     fontWeight: "900",
+  },
+  emptyCard: {
+    borderRadius: 18,
+    backgroundColor: "#0E1B36",
+    padding: 18,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: "#F7FAFF",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  emptyText: {
+    color: "#9FB0CF",
+    fontSize: 15,
+    lineHeight: 22,
   },
 });

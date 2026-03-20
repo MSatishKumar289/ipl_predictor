@@ -11,7 +11,6 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { createDemoMatches } from "@/lib/demoMatches";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -53,43 +52,6 @@ const filters: { key: BetFilter; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "settled", label: "Settled" },
   { key: "all", label: "All" },
-];
-
-const demoPredictions: PredictionRecord[] = [
-  {
-    id: "demo-pred-1",
-    matchId: "demo-1",
-    userId: "demo-user",
-    userDisplayName: "Player",
-    selectedTeam: "teamA",
-    amount: 500,
-    status: "pending",
-    payout: 0,
-    profit: 0,
-  },
-  {
-    id: "demo-pred-2",
-    matchId: "demo-3",
-    userId: "demo-user",
-    userDisplayName: "Player",
-    selectedTeam: "teamB",
-    amount: 300,
-    status: "pending",
-    payout: 0,
-    profit: 0,
-  },
-  {
-    id: "demo-pred-3",
-    matchId: "demo-4",
-    userId: "demo-user",
-    userDisplayName: "Player",
-    selectedTeam: "teamA",
-    amount: 700,
-    status: "won",
-    payout: 1400,
-    profit: 700,
-    settledAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
 ];
 
 export default function MyBetsTab() {
@@ -140,15 +102,12 @@ export default function MyBetsTab() {
     return unsubscribe;
   }, [user]);
 
-  const displayMatches = matches.length ? matches : createDemoMatches();
-  const displayPredictions = predictions.length ? predictions : demoPredictions;
-
   const bets = useMemo<EnrichedBet[]>(
     () =>
-      displayPredictions
+      predictions
         .map((prediction) => ({
           ...prediction,
-          match: displayMatches.find((match) => match.id === prediction.matchId) ?? null,
+          match: matches.find((match) => match.id === prediction.matchId) ?? null,
         }))
         .sort((left, right) => {
           const leftDate = getTimestampValue(left.settledAt ?? left.updatedAt ?? left.createdAt);
@@ -157,7 +116,7 @@ export default function MyBetsTab() {
           );
           return rightDate - leftDate;
         }),
-    [displayMatches, displayPredictions]
+    [matches, predictions]
   );
 
   const filteredBets = useMemo(() => {
@@ -214,12 +173,6 @@ export default function MyBetsTab() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
               <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {!predictions.length ? (
-            <View style={styles.demoBanner}>
-              <Text style={styles.demoBannerText}>Showing demo bets for UI testing.</Text>
             </View>
           ) : null}
 
@@ -454,19 +407,6 @@ const styles = StyleSheet.create({
     color: "#F0B3B3",
     fontSize: 14,
     lineHeight: 20,
-  },
-  demoBanner: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#2C4C8F",
-    backgroundColor: "#102347",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  demoBannerText: {
-    color: "#A8C4FF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   summaryRow: {
     flexDirection: "row",

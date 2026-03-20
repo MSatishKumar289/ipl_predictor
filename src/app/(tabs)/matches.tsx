@@ -12,7 +12,6 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { createDemoMatches } from "@/lib/demoMatches";
 import { formatMatchDate, isMatchLocked, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -75,8 +74,7 @@ export default function MatchesTab() {
     return unsubscribe;
   }, [user]);
 
-  const displayMatches = matches.length ? matches : createDemoMatches();
-  const sections = useMemo(() => buildSections(displayMatches), [displayMatches]);
+  const sections = useMemo(() => buildSections(matches), [matches]);
 
   const activeMatches =
     activeFilter === "upcoming"
@@ -116,7 +114,7 @@ export default function MatchesTab() {
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={styles.header}>
-            <Text style={styles.title}>IPL 2024 Schedule</Text>
+            <Text style={styles.title}>IPL 2026 Schedule</Text>
           </View>
 
           <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
@@ -143,12 +141,6 @@ export default function MatchesTab() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
               <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {!matches.length ? (
-            <View style={styles.demoBanner}>
-              <Text style={styles.demoBannerText}>Showing demo matches for UI testing.</Text>
             </View>
           ) : null}
 
@@ -616,21 +608,6 @@ const styles = StyleSheet.create({
     color: "#F0B3B3",
     fontSize: 14,
     lineHeight: 20,
-  },
-  demoBanner: {
-    marginHorizontal: 24,
-    marginTop: 18,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#2C4C8F",
-    backgroundColor: "#102347",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  demoBannerText: {
-    color: "#A8C4FF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   featuredCard: {
     marginHorizontal: 24,
