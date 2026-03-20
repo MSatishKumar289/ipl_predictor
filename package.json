@@ -5,6 +5,7 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
+    "import-ipl-schedule-2026": "node ./scripts/import-ipl-schedule-2026.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

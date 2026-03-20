@@ -1,28 +1,15 @@
-import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { logout } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
   const { profile, error } = useAuth();
   const { width } = useWindowDimensions();
   const adminRoute = "/admin" as Href;
+  const logoutRoute = "/logout" as Href;
   const isDesktop = width >= 1024;
-
-  async function handleLogout() {
-    try {
-      await logout();
-      if (router.canDismiss()) {
-        router.dismissAll();
-      }
-      router.replace("/");
-    } catch (logoutError) {
-      const message = logoutError instanceof Error ? logoutError.message : "Unable to sign out.";
-      Alert.alert("Sign out failed", message);
-    }
-  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -97,7 +84,7 @@ export default function ProfileTab() {
             </Pressable>
           ) : null}
 
-          <Pressable style={styles.logoutButton} onPress={handleLogout}>
+          <Pressable style={styles.logoutButton} onPress={() => router.push(logoutRoute)}>
             <Text style={styles.logoutButtonText}>Sign Out</Text>
           </Pressable>
         </View>

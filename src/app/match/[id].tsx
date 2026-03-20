@@ -17,7 +17,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { createDemoMatches } from "@/lib/demoMatches";
 import { formatMatchDate, isMatchLocked, subscribeToMatch } from "@/lib/matches";
 import {
   placeOrEditPrediction,
@@ -60,16 +59,6 @@ export default function MatchDetailScreen() {
     setIsConfirmVisible(false);
     setIsSuccessVisible(false);
 
-    if (id.startsWith("demo-")) {
-      const demoMatch = createDemoMatches().find((entry) => entry.id === id) ?? null;
-      setMatch(demoMatch);
-      setMatchError(null);
-      setPrediction(null);
-      setPublicPredictions([]);
-      setIsLoadingMatch(false);
-      return;
-    }
-
     const unsubscribe = subscribeToMatch(
       id,
       (nextMatch) => {
@@ -99,7 +88,7 @@ export default function MatchDetailScreen() {
   }, [toastMessage]);
 
   useEffect(() => {
-    if (!id || !user || id.startsWith("demo-")) {
+    if (!id || !user) {
       setPrediction(null);
       setSelection("teamA");
       setAmount("");
@@ -124,7 +113,7 @@ export default function MatchDetailScreen() {
   }, [id, user]);
 
   useEffect(() => {
-    if (!id || id.startsWith("demo-")) {
+    if (!id) {
       return;
     }
 
