@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 
 import { ensureUserProfile, subscribeToAuth, subscribeToUserProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth-types";
+import { firebaseInitializationError } from "@/lib/firebase";
 
 type AuthContextValue = {
   user: User | null;
@@ -20,59 +21,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (firebaseInitializationError) {
+      setUser(null);
+      setProfile(null);
+      setError(firebaseInitializationError);
+      setIsLoading(false);
+      return;
+    }
+
     let unsubscribeProfile: (() => void) | null = null;
 
-    const unsubscribeAuth = subscribeToAuth(async (nextUser) => {
-      unsubscribeProfile?.();
-      unsubscribeProfile = null;
-      setUser(nextUser);
+    let unsubscribeAuth: (() => void) | null = null;
 
-      if (!nextUser) {
-        setProfile(null);
+    try {
+      unsubscribeAuth = subscribeToAuth(async (nextUser) => {
+        unsubscribeProfile?.();
+        unsubscribeProfile = null;
+        setUser(nextUser);
+
+        if (!nextUser) {
+          setProfile(null);
+          setError(null);
+          setIsLoading(false);
+          return;
+        }
+
         setError(null);
-        setIsLoading(false);
-        return;
-      }
 
-      setError(null);
+        try {
+          await ensureUserProfile(nextUser, {
+            grantSignupBonusIfNew: true,
+          });
 
-      try {
-        await ensureUserProfile(nextUser, {
-          grantSignupBonusIfNew: true,
-        });
+          unsubscribeProfile = subscribeToUserProfile(
+            nextUser.uid,
+            (nextProfile) => {
+              setProfile(nextProfile);
+              setError(null);
+              setIsLoading(false);
+            },
+            (profileError) => {
+              const message =
+                profileError instanceof Error
+                  ? profileError.message
+                  : "Unable to subscribe to user profile.";
 
-        unsubscribeProfile = subscribeToUserProfile(
-          nextUser.uid,
-          (nextProfile) => {
-            setProfile(nextProfile);
-            setError(null);
-            setIsLoading(false);
-          },
-          (profileError) => {
-            const message =
-              profileError instanceof Error
-                ? profileError.message
-                : "Unable to subscribe to user profile.";
+              setProfile(null);
+              setError(`Profile read failed: ${message}`);
+              setIsLoading(false);
+            }
+          );
+        } catch (authError) {
+          const message =
+            authError instanceof Error ? authError.message : "Unable to load user profile.";
 
-            setProfile(null);
-            setError(`Profile read failed: ${message}`);
-            setIsLoading(false);
-          }
-        );
-      } catch (authError) {
-        const message =
-          authError instanceof Error ? authError.message : "Unable to load user profile.";
+          setProfile(null);
+          setError(`Profile read failed: ${message}`);
+        } finally {
+          setIsLoading(false);
+        }
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to initialize authentication.";
 
-        setProfile(null);
-        setError(`Profile read failed: ${message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    });
+      setProfile(null);
+      setError(message);
+      setIsLoading(false);
+    }
 
     return () => {
       unsubscribeProfile?.();
-      unsubscribeAuth();
+      unsubscribeAuth?.();
     };
   }, []);
 

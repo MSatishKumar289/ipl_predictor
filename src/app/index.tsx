@@ -23,7 +23,7 @@ type AuthMode = "login" | "signup";
 const signupBonus = 50000;
 
 export default function HomeScreen() {
-  const { isLoading, user } = useAuth();
+  const { error, isLoading, user } = useAuth();
   const { width } = useWindowDimensions();
   const [mode, setMode] = useState<AuthMode>("signup");
   const [displayName, setDisplayName] = useState("");
@@ -204,6 +204,12 @@ export default function HomeScreen() {
                   ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
                   : "Use the email and password you registered with."}
               </Text>
+
+              {error ? (
+                <View style={styles.errorCard}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
               {submitError ? (
                 <View style={styles.errorCard}>

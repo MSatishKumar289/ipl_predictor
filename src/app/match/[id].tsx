@@ -536,7 +536,7 @@ export default function MatchDetailScreen() {
       </Modal>
 
       {toastMessage ? (
-        <View pointerEvents="none" style={styles.toastWrap}>
+        <View style={[styles.toastWrap, styles.toastNoPointerEvents]}>
           <View style={styles.toastCard}>
             <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
@@ -1016,6 +1016,9 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 24,
     alignItems: "center",
+  },
+  toastNoPointerEvents: {
+    pointerEvents: "none",
   },
   toastCard: {
     maxWidth: 420,
