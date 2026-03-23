@@ -48,7 +48,11 @@ function deriveStatus({
     return "completed" as const;
   }
 
-  return isMatchLocked(lockAt) ? "locked" : (status ?? "upcoming");
+  if (isMatchLocked(lockAt)) {
+    return "locked" as const;
+  }
+
+  return "upcoming" as const;
 }
 
 function normalizeMatch(matchDoc: { id: string; data: Omit<MatchRecord, "id"> }): MatchRecord {
@@ -129,7 +133,7 @@ export async function createMatch(input: CreateMatchInput, createdBy: string) {
     teamBShort: input.teamBShort.trim().toUpperCase(),
     startAt: startAtDate.toISOString(),
     lockAt: lockAt.toISOString(),
-    status: deriveStatus({ lockAt: lockAt.toISOString(), winner: null }),
+    status: "upcoming",
     winner: null,
     isEditableBeforeLock: input.isEditableBeforeLock,
     createdBy,

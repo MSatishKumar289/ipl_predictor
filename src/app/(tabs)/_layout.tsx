@@ -70,7 +70,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={tabIcons.home}
-              style={[styles.icon, { tintColor: color }]}
+              style={styles.icon}
+              resizeMode="contain"
+              tintColor={color}
             />
           ),
         }}
@@ -82,7 +84,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={tabIcons.matches}
-              style={[styles.icon, { tintColor: color }]}
+              style={styles.icon}
+              resizeMode="contain"
+              tintColor={color}
             />
           ),
         }}
@@ -94,7 +98,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={tabIcons.leaderboard}
-              style={[styles.icon, { tintColor: color }]}
+              style={styles.icon}
+              resizeMode="contain"
+              tintColor={color}
             />
           ),
         }}
@@ -106,7 +112,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={tabIcons.myBets}
-              style={[styles.icon, { tintColor: color }]}
+              style={styles.icon}
+              resizeMode="contain"
+              tintColor={color}
             />
           ),
         }}
@@ -118,7 +126,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => (
             <Image
               source={tabIcons.profile}
-              style={[styles.icon, { tintColor: color }]}
+              style={styles.icon}
+              resizeMode="contain"
+              tintColor={color}
             />
           ),
         }}
@@ -144,6 +154,5 @@ const styles = StyleSheet.create({
   icon: {
     width: 18,
     height: 18,
-    resizeMode: "contain",
   },
 });

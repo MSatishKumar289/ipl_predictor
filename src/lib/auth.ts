@@ -16,7 +16,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 
-import { auth, db } from "./firebase";
+import { getFirebaseServices } from "./firebase";
 import type { UserProfile, UserProfileRecord } from "./auth-types";
 
 const SIGNUP_BONUS = 50000;
@@ -32,6 +32,7 @@ export async function signUpWithEmail({
   password: string;
   phoneNumber?: string;
 }) {
+  const { auth } = getFirebaseServices();
   const credential = await createUserWithEmailAndPassword(auth, email, password);
 
   await updateProfile(credential.user, { displayName });
@@ -51,19 +52,23 @@ export async function signInWithEmail({
   email: string;
   password: string;
 }) {
+  const { auth } = getFirebaseServices();
   const credential = await signInWithEmailAndPassword(auth, email, password);
   return credential.user;
 }
 
 export function subscribeToAuth(callback: (user: User | null) => void) {
+  const { auth } = getFirebaseServices();
   return onAuthStateChanged(auth, callback);
 }
 
 export async function logout() {
+  const { auth } = getFirebaseServices();
   await signOut(auth);
 }
 
 export async function getUserProfile(uid: string) {
+  const { db } = getFirebaseServices();
   const snapshot = await getDoc(doc(db, "users", uid));
   return snapshot.exists() ? (snapshot.data() as UserProfile) : null;
 }
@@ -73,6 +78,7 @@ export function subscribeToUserProfile(
   callback: (profile: UserProfile | null) => void,
   onError?: (error: Error) => void
 ) {
+  const { db } = getFirebaseServices();
   return onSnapshot(
     doc(db, "users", uid),
     (snapshot) => {
@@ -88,6 +94,7 @@ export function subscribeToLeaderboardUsers(
   callback: (users: UserProfileRecord[]) => void,
   onError?: (error: Error) => void
 ) {
+  const { db } = getFirebaseServices();
   return onSnapshot(
     collection(db, "users"),
     (snapshot) => {
@@ -132,6 +139,7 @@ export async function ensureUserProfile(
     grantSignupBonusIfNew?: boolean;
   }
 ) {
+  const { db } = getFirebaseServices();
   const userRef = doc(db, "users", user.uid);
   const snapshot = await getDoc(userRef);
 
@@ -161,6 +169,7 @@ async function createUserProfile(
     grantSignupBonus: boolean;
   }
 ) {
+  const { db } = getFirebaseServices();
   const now = serverTimestamp();
   const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
 
