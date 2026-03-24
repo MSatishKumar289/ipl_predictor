@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { signInWithEmail, signUpWithEmail } from "@/lib/auth";
+import { signInWithPhone, signUpWithPhone } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 
 type AuthMode = "login" | "signup";
@@ -27,9 +27,8 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const [mode, setMode] = useState<AuthMode>("signup");
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isDesktop = width >= 1024;
@@ -37,8 +36,8 @@ export default function HomeScreen() {
   async function handleSubmit() {
     setSubmitError(null);
 
-    if (!email.trim() || !password.trim()) {
-      const message = "Email and password are required.";
+    if (!phoneNumber.trim() || !password.trim()) {
+      const message = "Mobile number and password are required.";
       setSubmitError(message);
       Alert.alert("Missing details", message);
       return;
@@ -62,15 +61,14 @@ export default function HomeScreen() {
 
     try {
       if (mode === "signup") {
-        await signUpWithEmail({
+        await signUpWithPhone({
           displayName: displayName.trim(),
-          email: email.trim(),
+          phoneNumber: phoneNumber.trim(),
           password,
-          phoneNumber: phoneNumber.trim() || undefined,
         });
       } else {
-        await signInWithEmail({
-          email: email.trim(),
+        await signInWithPhone({
+          phoneNumber: phoneNumber.trim(),
           password,
         });
       }
@@ -88,7 +86,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color="#1E5AE0" />
-          <Text style={styles.loadingText}>Connecting IPL Predictor...</Text>
+          <Text style={styles.loadingText}>Connecting Friends Premier League...</Text>
         </View>
       </SafeAreaView>
     );
@@ -118,7 +116,9 @@ export default function HomeScreen() {
                   resizeMode="cover"
                 />
               </View>
-              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>IPL Predictor</Text>
+              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>
+                Friends Premier League
+              </Text>
               <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
                 Private leaderboard, match winner picks, and automatic scorekeeping.
               </Text>
@@ -168,25 +168,16 @@ export default function HomeScreen() {
                     value={displayName}
                     onChangeText={setDisplayName}
                   />
-                  <TextInput
-                    placeholder="Phone number (optional)"
-                    placeholderTextColor="#4C5D7C"
-                    style={styles.input}
-                    keyboardType="phone-pad"
-                    value={phoneNumber}
-                    onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
-                  />
                 </>
               ) : null}
 
               <TextInput
-                placeholder="Email address"
+                placeholder="Mobile number"
                 placeholderTextColor="#4C5D7C"
                 style={styles.input}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
               />
 
               <TextInput
@@ -202,7 +193,7 @@ export default function HomeScreen() {
               <Text style={styles.helperText}>
                 {mode === "signup"
                   ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
-                  : "Use the email and password you registered with."}
+                  : "Use the mobile number and password you registered with."}
               </Text>
 
               {error ? (
@@ -430,14 +421,14 @@ function getAuthErrorMessage(error: unknown) {
 
   switch (code) {
     case "auth/email-already-in-use":
-      return "That email is already registered. Try logging in instead.";
+      return "That mobile number is already registered. Try logging in instead.";
     case "auth/invalid-email":
-      return "Enter a valid email address.";
+      return "Unable to prepare mobile login for this account.";
     case "auth/weak-password":
       return "Password must be at least 6 characters.";
     case "auth/invalid-credential":
     case "auth/invalid-login-credentials":
-      return "Incorrect email or password.";
+      return "Incorrect mobile number or password.";
     case "auth/too-many-requests":
       return "Too many attempts. Wait a bit and try again.";
     case "auth/network-request-failed":

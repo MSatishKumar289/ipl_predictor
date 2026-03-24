@@ -1,7 +1,9 @@
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useState } from "react";
 
+import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
@@ -9,6 +11,7 @@ export default function ProfileTab() {
   const { width } = useWindowDimensions();
   const adminRoute = "/admin" as Href;
   const logoutRoute = "/logout" as Href;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDesktop = width >= 1024;
 
   return (
@@ -19,11 +22,16 @@ export default function ProfileTab() {
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={[styles.header, isDesktop && styles.headerDesktop]}>
-            <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>Account</Text>
-            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>Profile</Text>
-            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-              Track your balance, results, and account status.
-            </Text>
+            <View style={[styles.headerTopRow, isDesktop && styles.headerTopRowDesktop]}>
+              <View style={styles.headerTextWrap}>
+                <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>Account</Text>
+                <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>Profile</Text>
+                <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+                  Track your balance, results, and account status.
+                </Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            </View>
           </View>
 
           {error ? (
@@ -39,7 +47,7 @@ export default function ProfileTab() {
             </View>
             <View style={styles.heroBody}>
               <Text style={styles.name}>{profile?.displayName || "Player"}</Text>
-              <Text style={styles.email}>{profile?.email || "No email"}</Text>
+              <Text style={styles.email}>{profile?.phoneNumber || "No mobile number"}</Text>
               <View style={styles.roleChip}>
                 <Text style={styles.roleChipText}>
                   {profile?.role === "admin" ? "Admin" : "User"}
@@ -89,6 +97,7 @@ export default function ProfileTab() {
           </Pressable>
         </View>
       </ScrollView>
+      <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -166,6 +175,20 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   header: {
+    gap: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  headerTopRowDesktop: {
+    width: "100%",
+    maxWidth: 720,
+  },
+  headerTextWrap: {
+    flex: 1,
     gap: 8,
   },
   headerDesktop: {
@@ -288,7 +311,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   statCard: {
-    width: "49%",
+    width: "48%",
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#223A63",

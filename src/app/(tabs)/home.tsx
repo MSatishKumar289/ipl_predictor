@@ -11,6 +11,7 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -33,6 +34,7 @@ export default function HomeTab() {
   const [predictions, setPredictions] = useState<Record<string, PredictionRecord>>({});
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDesktop = width >= 1024;
 
   useEffect(() => {
@@ -84,17 +86,11 @@ export default function HomeTab() {
         ? sections.live
         : sections.completed;
 
-  const featuredMatch =
+  const todayMatches = activeFilter === "upcoming" ? sections.today : [];
+  const futureUpcomingMatches =
     activeFilter === "upcoming"
-      ? sections.today[0] ?? sections.upcoming[0] ?? null
-      : activeFilter === "live"
-        ? sections.live[0] ?? null
-        : sections.completed[0] ?? null;
-
-  const remainingMatches = featuredMatch
-    ? activeMatches.filter((match) => match.id !== featuredMatch.id)
-    : activeMatches;
-
+      ? sections.upcoming.filter((match) => !sections.today.some((todayMatch) => todayMatch.id === match.id))
+      : [];
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
@@ -102,11 +98,16 @@ export default function HomeTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>IPL Predictor</Text>
-          <Text style={styles.title}>Welcome back, {profile?.displayName || "Player"}</Text>
-          <Text style={styles.subtitle}>
-            Temporary home data is shown here until the live dashboard is wired in.
-          </Text>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.eyebrow}>Friends Premier League</Text>
+              <Text style={styles.title}>Welcome back, {profile?.displayName || "Player"}</Text>
+              <Text style={styles.subtitle}>
+                Temporary home data is shown here until the live dashboard is wired in.
+              </Text>
+            </View>
+            <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+          </View>
         </View>
 
         <View style={styles.balanceCard}>
@@ -185,22 +186,42 @@ export default function HomeTab() {
                 }
               />
 
-              {featuredMatch ? (
-                <FeaturedMatchCard
-                  match={featuredMatch}
-                  compact={width < 768}
-                  onOpen={() => openMatch(featuredMatch.id)}
-                />
+              {activeFilter === "upcoming" ? (
+                todayMatches.length ? (
+                  <View style={styles.featuredList}>
+                    {todayMatches.map((match) => (
+                      <FeaturedMatchCard
+                        key={match.id}
+                        match={match}
+                        prediction={predictions[match.id] ?? null}
+                        compact={width < 768}
+                        onOpen={() => openMatch(match.id)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <EmptyState filter={activeFilter} />
+                )
+              ) : activeMatches.length ? (
+                <View style={styles.featuredList}>
+                  {activeMatches.map((match) => (
+                    <FeaturedMatchCard
+                      key={match.id}
+                      match={match}
+                      prediction={predictions[match.id] ?? null}
+                      compact={width < 768}
+                      onOpen={() => openMatch(match.id)}
+                    />
+                  ))}
+                </View>
               ) : (
                 <EmptyState filter={activeFilter} />
               )}
 
-              {remainingMatches.length ? (
+              {activeFilter === "upcoming" && futureUpcomingMatches.length ? (
                 <View style={styles.listSection}>
-                  <Text style={styles.listSectionTitle}>
-                    {activeFilter === "completed" ? "More results" : "Upcoming matches"}
-                  </Text>
-                  {remainingMatches.map((match) => (
+                  <Text style={styles.listSectionTitle}>Upcoming matches</Text>
+                  {futureUpcomingMatches.map((match) => (
                     <CompactMatchRow
                       key={match.id}
                       match={match}
@@ -214,20 +235,23 @@ export default function HomeTab() {
           )}
         </View>
       </ScrollView>
+      <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }
 
 function FeaturedMatchCard({
   match,
+  prediction,
   compact = false,
   onOpen,
 }: {
   match: MatchRecord;
+  prediction: PredictionRecord | null;
   compact?: boolean;
   onOpen: () => void;
 }) {
-  const badge = getMatchBadge(match);
+  const badge = getMatchBadge(match, prediction);
 
   return (
     <Pressable style={styles.featuredCard} onPress={onOpen}>
@@ -239,19 +263,25 @@ function FeaturedMatchCard({
           {compact ? (
             <View style={styles.featuredSummaryMetaWrap}>
               <Text style={styles.featuredSummaryMeta}>
-                Match {match.matchNumber} | {getCollapsedScheduleLabel(match)},
+                {getCollapsedScheduleLabel(match)}
               </Text>
               <Text style={styles.featuredSummaryMeta}>{getBetLockTimeLabel(match)}</Text>
             </View>
           ) : (
             <Text style={styles.featuredSummaryMeta}>
-              Match {match.matchNumber} | {getCollapsedScheduleLabel(match)} |{" "}
-              {getBetLockTimeLabel(match)}
+              {getCollapsedScheduleLabel(match)} | {getBetLockTimeLabel(match)}
             </Text>
           )}
         </View>
         <View style={styles.featuredSummarySide}>
+          <Text style={styles.featuredMatchNumber}>Match {match.matchNumber}</Text>
           <StatusBadge label={badge.label} tone={badge.tone} compact />
+          {prediction ? (
+            <Text style={styles.featuredBetHint}>
+              Your Bet: Rs. {prediction.amount.toLocaleString("en-IN")} |{" "}
+              {prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort}
+            </Text>
+          ) : null}
         </View>
       </View>
     </Pressable>
@@ -267,7 +297,7 @@ function CompactMatchRow({
   prediction: PredictionRecord | null;
   onOpen: () => void;
 }) {
-  const badge = getMatchBadge(match);
+  const badge = getMatchBadge(match, prediction);
 
   return (
     <View style={styles.rowCard}>
@@ -388,11 +418,11 @@ function buildSections(matches: MatchRecord[]) {
   return { today, upcoming, live, completed };
 }
 
-function getMatchBadge(match: MatchRecord) {
+function getMatchBadge(match: MatchRecord, prediction: PredictionRecord | null = null) {
   const bettingState = getBettingState(match);
 
   if (bettingState === "bet_open") {
-    return { label: "Bet Open", tone: "success" as const };
+    return { label: prediction ? "Edit Bet" : "Bet Open", tone: "success" as const };
   }
 
   if (bettingState === "bet_locked") {
@@ -430,7 +460,7 @@ function getBetLockTimeLabel(match: MatchRecord) {
     minute: "2-digit",
   }).format(new Date(match.lockAt));
 
-  return `Betting Locks at ${timeLabel}`;
+  return `Betting Locks : ${timeLabel}`;
 }
 
 function getCollapsedScheduleLabel(match: MatchRecord) {
@@ -539,6 +569,16 @@ const styles = StyleSheet.create({
     maxWidth: 960,
   },
   hero: {
+    gap: 8,
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  heroTextWrap: {
+    flex: 1,
     gap: 8,
   },
   eyebrow: {
@@ -705,6 +745,9 @@ const styles = StyleSheet.create({
     borderColor: "#213456",
     backgroundColor: "#14244D",
   },
+  featuredList: {
+    gap: 16,
+  },
   featuredSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -732,6 +775,20 @@ const styles = StyleSheet.create({
   featuredSummarySide: {
     alignSelf: "center",
     marginLeft: 12,
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  featuredMatchNumber: {
+    color: "#8FA5CC",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  featuredBetHint: {
+    color: "#AFC0DE",
+    fontSize: 12,
+    fontWeight: "700",
   },
   confirmationCard: {
     flexDirection: "row",
