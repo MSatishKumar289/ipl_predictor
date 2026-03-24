@@ -31,19 +31,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    match /login_index/{phoneNumber} {
-      allow get: if true;
-      allow list: if false;
-      allow create, update: if isAdmin() || (
-        signedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.phoneNumber == phoneNumber &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.phoneNumber == phoneNumber
-      );
-      allow delete: if false;
-    }
-
     match /transactions/{transactionId} {
       allow read: if signedIn();
       allow create: if signedIn() || isAdmin();
