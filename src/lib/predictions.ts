@@ -10,6 +10,7 @@ import {
 
 import { db } from "./firebase";
 import type { UserProfile } from "./auth-types";
+import { isBettingOpen } from "./matches";
 import type { MatchRecord } from "./match-types";
 import type { PredictionRecord, PredictionSelection } from "./prediction-types";
 
@@ -141,6 +142,14 @@ export async function placeOrEditPrediction({
     const existingPrediction = predictionSnapshot.exists()
       ? (predictionSnapshot.data() as Omit<PredictionRecord, "id">)
       : null;
+
+    if (!isBettingOpen(liveMatch)) {
+      if (Date.now() >= new Date(liveMatch.lockAt).getTime()) {
+        throw new Error("Predictions are locked for this match.");
+      }
+
+      throw new Error("Betting opens 24 hours before the match starts.");
+    }
 
     if (Date.now() >= new Date(liveMatch.lockAt).getTime()) {
       throw new Error("Predictions are locked for this match.");

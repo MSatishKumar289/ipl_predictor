@@ -103,6 +103,7 @@ export function subscribeToLeaderboardUsers(
           uid: userDoc.id,
           ...(userDoc.data() as UserProfile),
         }))
+        .filter((user) => user.totalPredictions > 0)
         .sort((left, right) => {
           if (right.points !== left.points) {
             return right.points - left.points;

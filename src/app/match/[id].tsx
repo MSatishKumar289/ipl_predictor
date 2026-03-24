@@ -17,7 +17,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { formatMatchDate, isMatchLocked, subscribeToMatch } from "@/lib/matches";
+import {
+  formatMatchDate,
+  getBettingState,
+  isMatchLocked,
+  subscribeToMatch,
+} from "@/lib/matches";
 import {
   placeOrEditPrediction,
   subscribeToMatchPredictions,
@@ -128,8 +133,16 @@ export default function MatchDetailScreen() {
   }, [id]);
 
   const locked = match ? isMatchLocked(match.lockAt) : false;
-  const canEdit = !!match && !locked && (!prediction || match.isEditableBeforeLock);
-  const canRevealPredictions = locked || match?.status === "settled" || match?.status === "no_result";
+  const bettingState = match ? getBettingState(match) : null;
+  const canEdit =
+    !!match &&
+    bettingState === "bet_open" &&
+    (!prediction || match.isEditableBeforeLock);
+  const canRevealPredictions =
+    bettingState === "bet_locked" ||
+    match?.status === "settled" ||
+    match?.status === "no_result" ||
+    match?.status === "completed";
   const isDesktop = width >= 1024;
 
   const resultLabel = useMemo(() => {
@@ -240,9 +253,16 @@ export default function MatchDetailScreen() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save prediction.";
 
-      if (message === "Predictions are locked for this match.") {
+      if (
+        message === "Predictions are locked for this match." ||
+        message === "Betting opens 24 hours before the match starts."
+      ) {
         setIsConfirmVisible(false);
-        setToastMessage("Sorry, your bet could not be placed as the match was locked.");
+        setToastMessage(
+          message === "Predictions are locked for this match."
+            ? "Sorry, your bet could not be placed as the match was locked."
+            : "Betting for this match opens 24 hours before the start time."
+        );
         return;
       }
 
@@ -273,7 +293,7 @@ export default function MatchDetailScreen() {
                     return;
                   }
 
-                  router.replace("/(tabs)/matches");
+                  router.replace("/(tabs)/home");
                 }}
               >
                 <Text style={styles.backButtonText}>Back</Text>
@@ -377,9 +397,11 @@ export default function MatchDetailScreen() {
                 </Pressable>
               ) : (
                 <Text style={styles.lockedText}>
-                  {locked
-                    ? "Predictions are locked for this match."
-                    : "Admin has disabled editing for this fixture."}
+                  {bettingState === "closed"
+                    ? "Betting opens 24 hours before this match starts."
+                    : locked
+                      ? "Predictions are locked for this match."
+                      : "Admin has disabled editing for this fixture."}
                 </Text>
               )}
             </View>
@@ -443,7 +465,11 @@ export default function MatchDetailScreen() {
             <View style={styles.confirmMatchCard}>
               <View style={styles.confirmMatchBody}>
                 <Text style={styles.confirmEyebrow}>
-                  {locked ? "Locked Match" : "Live Tonight"}
+                  {bettingState === "closed"
+                    ? "Opens In 24h Window"
+                    : locked
+                      ? "Locked Match"
+                      : "Live Tonight"}
                 </Text>
                 <Text style={styles.confirmMatchTitle}>
                   {currentMatch.teamAName} vs {currentMatch.teamBName}

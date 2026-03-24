@@ -1,15 +1,8 @@
 import { Tabs } from "expo-router";
-import { ActivityIndicator, Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
-
-const tabIcons = {
-  home: require("../../../assets/images/tabIcons/home_ic.svg"),
-  matches: require("../../../assets/images/tabIcons/macthes_ic.svg"),
-  leaderboard: require("../../../assets/images/tabIcons/leaderboard_ic.svg"),
-  myBets: require("../../../assets/images/tabIcons/bets_ic.svg"),
-  profile: require("../../../assets/images/tabIcons/profile_ic.svg"),
-} as const;
 
 export default function TabsLayout() {
   const { isLoading, user } = useAuth();
@@ -68,26 +61,7 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
-            <Image
-              source={tabIcons.home}
-              style={styles.icon}
-              resizeMode="contain"
-              tintColor={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="matches"
-        options={{
-          title: "Matches",
-          tabBarIcon: ({ color }) => (
-            <Image
-              source={tabIcons.matches}
-              style={styles.icon}
-              resizeMode="contain"
-              tintColor={color}
-            />
+            <Ionicons name="home-outline" size={20} color={color} />
           ),
         }}
       />
@@ -96,13 +70,14 @@ export default function TabsLayout() {
         options={{
           title: "Leaderboard",
           tabBarIcon: ({ color }) => (
-            <Image
-              source={tabIcons.leaderboard}
-              style={styles.icon}
-              resizeMode="contain"
-              tintColor={color}
-            />
+            <Ionicons name="trophy-outline" size={20} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="matches"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -110,12 +85,7 @@ export default function TabsLayout() {
         options={{
           title: "My Bets",
           tabBarIcon: ({ color }) => (
-            <Image
-              source={tabIcons.myBets}
-              style={styles.icon}
-              resizeMode="contain"
-              tintColor={color}
-            />
+            <Ionicons name="ticket-outline" size={20} color={color} />
           ),
         }}
       />
@@ -124,12 +94,7 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => (
-            <Image
-              source={tabIcons.profile}
-              style={styles.icon}
-              resizeMode="contain"
-              tintColor={color}
-            />
+            <Ionicons name="person-outline" size={20} color={color} />
           ),
         }}
       />
@@ -150,9 +115,5 @@ const styles = StyleSheet.create({
     color: "#DDE5F7",
     fontSize: 16,
     fontWeight: "600",
-  },
-  icon: {
-    width: 18,
-    height: 18,
   },
 });
