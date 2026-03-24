@@ -236,7 +236,7 @@ export default function MyBetsTab() {
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No bets in this section</Text>
                 <Text style={styles.emptyText}>
-                  Place a prediction from the Matches tab and it will show up here.
+                  Place a prediction from Home and it will show up here.
                 </Text>
               </View>
             )}

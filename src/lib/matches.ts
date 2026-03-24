@@ -19,10 +19,41 @@ import type { CreateMatchInput, MatchOutcome, MatchRecord, MatchStatus } from ".
 import type { PredictionRecord } from "./prediction-types";
 
 const MATCH_LOCK_MINUTES = 5;
+const BETTING_OPEN_HOURS = 24;
 const WIN_POINTS = 3;
+
+export type BettingState = "closed" | "bet_open" | "bet_locked" | "completed";
 
 export function isMatchLocked(lockAt: string) {
   return Date.now() >= new Date(lockAt).getTime();
+}
+
+export function isBettingOpen(match: Pick<MatchRecord, "startAt" | "lockAt" | "status">) {
+  return getBettingState(match) === "bet_open";
+}
+
+export function getBettingState(
+  match: Pick<MatchRecord, "startAt" | "lockAt" | "status">
+): BettingState {
+  if (
+    match.status === "completed" ||
+    match.status === "settled" ||
+    match.status === "no_result"
+  ) {
+    return "completed";
+  }
+
+  if (isMatchLocked(match.lockAt) || match.status === "locked") {
+    return "bet_locked";
+  }
+
+  const bettingOpenAt = new Date(match.startAt).getTime() - BETTING_OPEN_HOURS * 60 * 60 * 1000;
+
+  if (Date.now() >= bettingOpenAt) {
+    return "bet_open";
+  }
+
+  return "closed";
 }
 
 function deriveStatus({

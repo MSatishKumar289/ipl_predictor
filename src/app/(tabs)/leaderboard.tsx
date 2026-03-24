@@ -49,29 +49,8 @@ export default function LeaderboardTab() {
   );
 
   const currentUserEntry = useMemo(() => {
-    const directMatch = user ? rankedUsers.find((entry) => entry.uid === user.uid) : null;
-
-    if (directMatch) {
-      return directMatch;
-    }
-
-    if (!user || !profile) {
-      return null;
-    }
-
-    return {
-      uid: user.uid,
-      rank: rankedUsers.length + 1,
-      displayName: profile.displayName,
-      email: profile.email,
-      role: profile.role,
-      balance: profile.balance,
-      points: profile.points,
-      wins: profile.wins,
-      losses: profile.losses,
-      totalPredictions: profile.totalPredictions,
-    };
-  }, [profile, rankedUsers, user]);
+    return user ? rankedUsers.find((entry) => entry.uid === user.uid) ?? null : null;
+  }, [rankedUsers, user]);
 
   const topThree = rankedUsers.slice(0, 3);
   const remainingUsers = rankedUsers.slice(3);
