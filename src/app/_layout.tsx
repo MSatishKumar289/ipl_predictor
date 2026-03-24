@@ -1,5 +1,6 @@
 import { Redirect, Stack, usePathname } from "expo-router";
 
+import { QuickRulesWidget } from "@/components/QuickRulesWidget";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -20,6 +21,7 @@ function AuthGate() {
   const pathname = usePathname();
   const isRootAuthScreen = pathname === authRoute;
   const isPublicRoute = publicRoutes.has(pathname);
+  const shouldShowQuickRules = !isLoading && !!user && !isPublicRoute;
 
   if (!isLoading && !user && !isPublicRoute) {
     return <Redirect href={authRoute} />;
@@ -30,11 +32,14 @@ function AuthGate() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: "#0A1325" },
-      }}
-    />
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: "#0A1325" },
+        }}
+      />
+      <QuickRulesWidget enabled={shouldShowQuickRules} autoOpen={shouldShowQuickRules} />
+    </>
   );
 }

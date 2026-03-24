@@ -7,17 +7,13 @@ import {
   type User,
 } from "firebase/auth";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
-  query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
-  where,
 } from "firebase/firestore";
 
 import { getFirebaseServices } from "./firebase";
@@ -44,55 +40,28 @@ function buildPhoneAuthEmail(phoneNumber: string) {
   return `${phoneNumber}@${PHONE_AUTH_DOMAIN}`;
 }
 
+function getPhoneNumberFromAuthEmail(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  const suffix = `@${PHONE_AUTH_DOMAIN}`;
+
+  if (!normalized.endsWith(suffix)) {
+    return null;
+  }
+
+  const phoneNumber = normalized.slice(0, -suffix.length);
+  return /^[0-9]{10,}$/.test(phoneNumber) ? phoneNumber : null;
+}
+
 function looksLikePhoneLabel(value?: string | null) {
   if (!value) {
     return false;
   }
 
   return /^[0-9]{10,}$/.test(value.trim());
-}
-
-async function getLoginIndexEntry(phoneNumber: string) {
-  const { db } = getFirebaseServices();
-  const snapshot = await getDoc(doc(db, "login_index", phoneNumber));
-  return snapshot.exists()
-    ? (snapshot.data() as { authEmail: string; userId: string; phoneNumber: string })
-    : null;
-}
-
-async function ensurePhoneLoginAvailable(phoneNumber: string) {
-  const existingEntry = await getLoginIndexEntry(phoneNumber);
-
-  if (existingEntry) {
-    throw new Error("That mobile number is already registered. Try logging in instead.");
-  }
-}
-
-async function upsertPhoneLoginIndex({
-  userId,
-  phoneNumber,
-  authEmail,
-}: {
-  userId: string;
-  phoneNumber?: string | null;
-  authEmail?: string | null;
-}) {
-  if (!phoneNumber || !authEmail) {
-    return;
-  }
-
-  const { db } = getFirebaseServices();
-
-  await setDoc(
-    doc(db, "login_index", phoneNumber),
-    {
-      userId,
-      phoneNumber,
-      authEmail,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
 }
 
 export async function signUpWithPhone({
@@ -108,17 +77,9 @@ export async function signUpWithPhone({
   const normalizedPhoneNumber = validatePhoneNumber(phoneNumber);
   const authEmail = buildPhoneAuthEmail(normalizedPhoneNumber);
 
-  await ensurePhoneLoginAvailable(normalizedPhoneNumber);
-
   const credential = await createUserWithEmailAndPassword(auth, authEmail, password);
 
   await updateProfile(credential.user, { displayName });
-  await ensureUserProfile(credential.user, {
-    displayName,
-    phoneNumber: normalizedPhoneNumber,
-    authEmail,
-    grantSignupBonusIfNew: true,
-  });
 
   return credential.user;
 }
@@ -130,29 +91,10 @@ export async function signInWithPhone({
   phoneNumber: string;
   password: string;
 }) {
-  const { auth, db } = getFirebaseServices();
+  const { auth } = getFirebaseServices();
   const normalizedPhoneNumber = validatePhoneNumber(phoneNumber);
-  const loginIndexEntry = await getLoginIndexEntry(normalizedPhoneNumber);
-  const authEmail = loginIndexEntry?.authEmail ?? buildPhoneAuthEmail(normalizedPhoneNumber);
+  const authEmail = buildPhoneAuthEmail(normalizedPhoneNumber);
   const credential = await signInWithEmailAndPassword(auth, authEmail, password);
-
-  const userQuery = query(collection(db, "users"), where("phoneNumber", "==", normalizedPhoneNumber));
-  const userSnapshot = await getDocs(userQuery);
-
-  if (userSnapshot.size === 1) {
-    await updateDoc(userSnapshot.docs[0].ref, {
-      email: authEmail,
-      loginMethod: "phone",
-      updatedAt: serverTimestamp(),
-    });
-  }
-
-  await ensureUserProfile(credential.user, {
-    phoneNumber: normalizedPhoneNumber,
-    authEmail,
-    grantSignupBonusIfNew: false,
-  });
-
   return credential.user;
 }
 
@@ -247,8 +189,10 @@ export async function ensureUserProfile(
 
   if (snapshot.exists()) {
     const profile = snapshot.data() as UserProfile;
-    const normalizedPhoneNumber = phoneNumber ? normalizePhoneNumber(phoneNumber) : profile.phoneNumber;
     const resolvedAuthEmail = authEmail ?? profile.email ?? user.email ?? null;
+    const normalizedPhoneNumber =
+      (phoneNumber ? normalizePhoneNumber(phoneNumber) : profile.phoneNumber) ??
+      getPhoneNumberFromAuthEmail(resolvedAuthEmail);
     const resolvedDisplayName =
       displayName ??
       (!looksLikePhoneLabel(user.displayName) ? user.displayName : null) ??
@@ -261,12 +205,6 @@ export async function ensureUserProfile(
         email: resolvedAuthEmail,
         loginMethod: "phone",
         updatedAt: serverTimestamp(),
-      });
-
-      await upsertPhoneLoginIndex({
-        userId: user.uid,
-        phoneNumber: normalizedPhoneNumber,
-        authEmail: resolvedAuthEmail,
       });
     }
 
@@ -300,43 +238,50 @@ async function createUserProfile(
   }
 ) {
   const { db } = getFirebaseServices();
-  const now = serverTimestamp();
-  const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
-  const normalizedPhoneNumber = phoneNumber ? normalizePhoneNumber(phoneNumber) : null;
   const resolvedAuthEmail = authEmail ?? user.email ?? "";
+  const normalizedPhoneNumber =
+    (phoneNumber ? normalizePhoneNumber(phoneNumber) : null) ??
+    getPhoneNumberFromAuthEmail(resolvedAuthEmail);
+  const userRef = doc(db, "users", user.uid);
+  const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
 
-  await setDoc(doc(db, "users", user.uid), {
-    displayName,
-    email: resolvedAuthEmail,
-    phoneNumber: normalizedPhoneNumber,
-    loginMethod: normalizedPhoneNumber ? "phone" : "email",
-    role: "user",
-    balance: openingBalance,
-    points: 0,
-    wins: 0,
-    losses: 0,
-    totalPredictions: 0,
-    createdAt: now,
-    updatedAt: now,
-  });
+  await runTransaction(db, async (transaction) => {
+    const existingUser = await transaction.get(userRef);
 
-  if (grantSignupBonus) {
-    await addDoc(collection(db, "transactions"), {
-      userId: user.uid,
-      type: "signup_bonus",
-      amount: SIGNUP_BONUS,
-      balanceBefore: 0,
-      balanceAfter: SIGNUP_BONUS,
-      referenceType: "system",
-      referenceId: user.uid,
-      note: "Signup bonus credited on account creation",
+    if (existingUser.exists()) {
+      return;
+    }
+
+    const now = serverTimestamp();
+    const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
+
+    transaction.set(userRef, {
+      displayName,
+      email: resolvedAuthEmail,
+      phoneNumber: normalizedPhoneNumber,
+      loginMethod: normalizedPhoneNumber ? "phone" : "email",
+      role: "user",
+      balance: openingBalance,
+      points: 0,
+      wins: 0,
+      losses: 0,
+      totalPredictions: 0,
       createdAt: now,
+      updatedAt: now,
     });
-  }
 
-  await upsertPhoneLoginIndex({
-    userId: user.uid,
-    phoneNumber: normalizedPhoneNumber,
-    authEmail: resolvedAuthEmail,
+    if (grantSignupBonus) {
+      transaction.set(signupBonusRef, {
+        userId: user.uid,
+        type: "signup_bonus",
+        amount: SIGNUP_BONUS,
+        balanceBefore: 0,
+        balanceAfter: SIGNUP_BONUS,
+        referenceType: "system",
+        referenceId: user.uid,
+        note: "Signup bonus credited on account creation",
+        createdAt: now,
+      });
+    }
   });
 }
