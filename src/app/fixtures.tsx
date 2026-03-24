@@ -64,16 +64,18 @@ export default function FixturesScreen() {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.pageShell}>
-          <View style={styles.headerRow}>
-            <BackButton fallbackHref="/(tabs)/home" />
-            <View style={styles.headerTextWrap}>
-              <Text style={styles.eyebrow}>Menu</Text>
-              <Text style={styles.title}>Fixtures</Text>
-              <Text style={styles.subtitle}>
-                Full season fixture list with match timing and current status.
-              </Text>
+          <View style={styles.header}>
+            <View style={styles.headerRow}>
+              <BackButton fallbackHref="/(tabs)/home" />
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.eyebrow}>Menu</Text>
+                <Text style={styles.title}>Fixtures</Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
             </View>
-            <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            <Text style={styles.subtitle}>
+              Full season fixture list with match timing and current status.
+            </Text>
           </View>
 
           {error ? (
@@ -271,6 +273,9 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     gap: 22,
   },
+  header: {
+    gap: 10,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -296,6 +301,7 @@ const styles = StyleSheet.create({
     color: "#8EA0C1",
     fontSize: 16,
     lineHeight: 24,
+    paddingRight: 8,
   },
   errorCard: {
     borderRadius: 18,
