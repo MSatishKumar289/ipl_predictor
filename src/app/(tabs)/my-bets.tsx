@@ -11,6 +11,7 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -63,6 +64,7 @@ export default function MyBetsTab() {
   const [isLoadingPredictions, setIsLoadingPredictions] = useState(true);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches(
@@ -160,13 +162,18 @@ export default function MyBetsTab() {
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={[styles.header, isDesktop && styles.headerDesktop]}>
-            <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
-              Bet History
-            </Text>
-            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
-            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-              Track active picks, settled outcomes, and profit across matches.
-            </Text>
+            <View style={[styles.headerTopRow, isDesktop && styles.headerTopRowDesktop]}>
+              <View style={styles.headerTextWrap}>
+                <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
+                  Bet History
+                </Text>
+                <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
+                <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+                  Track active picks, settled outcomes, and profit across matches.
+                </Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            </View>
           </View>
 
           {error ? (
@@ -243,6 +250,7 @@ export default function MyBetsTab() {
           </View>
         </View>
       </ScrollView>
+      <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -259,7 +267,11 @@ function BetRow({ bet, onOpen }: { bet: EnrichedBet; onOpen: () => void }) {
         : bet.match.teamBShort;
 
   return (
-    <View style={styles.betRow}>
+    <Pressable
+      style={[styles.betRow, bet.match && styles.betRowPressable]}
+      onPress={bet.match ? onOpen : undefined}
+      disabled={!bet.match}
+    >
       <View style={styles.betTop}>
         <Text style={styles.betMatch}>{matchLabel}</Text>
         <StatusBadge status={bet.status} />
@@ -286,13 +298,7 @@ function BetRow({ bet, onOpen }: { bet: EnrichedBet; onOpen: () => void }) {
           {bet.profit.toLocaleString("en-IN")}
         </Text>
       </View>
-
-      {bet.match ? (
-        <Pressable style={styles.linkButton} onPress={onOpen}>
-          <Text style={styles.linkButtonText}>Open Match</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -365,6 +371,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   header: {
+    gap: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  headerTopRowDesktop: {
+    width: "100%",
+    maxWidth: 720,
+  },
+  headerTextWrap: {
+    flex: 1,
     gap: 8,
   },
   headerDesktop: {
@@ -483,6 +503,10 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
+  betRowPressable: {
+    borderWidth: 1,
+    borderColor: "#16294D",
+  },
   betTop: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -520,18 +544,6 @@ const styles = StyleSheet.create({
   },
   betProfitNegative: {
     color: "#F38B8B",
-  },
-  linkButton: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#14316A",
-  },
-  linkButtonText: {
-    color: "#A8C4FF",
-    fontSize: 13,
-    fontWeight: "800",
   },
   statusBadge: {
     borderRadius: 999,

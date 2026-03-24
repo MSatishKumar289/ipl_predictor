@@ -18,6 +18,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackIcon } from "@/components/BackIcon";
 import {
   createMatch,
   formatMatchDate,
@@ -264,7 +265,7 @@ export default function AdminScreen() {
                   router.replace("/(tabs)/profile");
                 }}
               >
-                <Text style={styles.backButtonText}>Back</Text>
+                <BackIcon />
               </Pressable>
               <View style={styles.headerTextWrap}>
                 <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
   },
   backButton: {
-    minWidth: 74,
+    width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
@@ -724,11 +725,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#223A63",
     marginTop: 2,
-  },
-  backButtonText: {
-    color: "#DDE5F7",
-    fontSize: 15,
-    fontWeight: "700",
   },
   title: {
     color: "#F5F7FB",

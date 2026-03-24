@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "backfill-phone-login-index": "node ./scripts/backfill-phone-login-index.js",
     "import-ipl-schedule-2026": "node ./scripts/import-ipl-schedule-2026.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
