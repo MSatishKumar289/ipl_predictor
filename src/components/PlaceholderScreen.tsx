@@ -20,14 +20,16 @@ export function PlaceholderScreen({
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.pageShell}>
-          <View style={styles.headerRow}>
-            <BackButton fallbackHref="/(tabs)/home" />
-            <View style={styles.headerTextWrap}>
-              <Text style={styles.eyebrow}>{eyebrow}</Text>
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.subtitle}>{subtitle}</Text>
+          <View style={styles.header}>
+            <View style={styles.headerTopRow}>
+              <BackButton fallbackHref="/(tabs)/home" />
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.eyebrow}>{eyebrow}</Text>
+                <Text style={styles.title}>{title}</Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
             </View>
-            <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
 
           <View style={styles.card}>
@@ -57,7 +59,10 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     gap: 22,
   },
-  headerRow: {
+  header: {
+    gap: 10,
+  },
+  headerTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 14,
@@ -82,6 +87,7 @@ const styles = StyleSheet.create({
     color: "#8EA0C1",
     fontSize: 16,
     lineHeight: 24,
+    paddingRight: 8,
   },
   card: {
     borderRadius: 24,
