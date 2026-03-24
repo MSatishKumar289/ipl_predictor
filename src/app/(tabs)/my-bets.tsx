@@ -11,6 +11,7 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -22,6 +23,12 @@ type BetFilter = "active" | "settled" | "all";
 type EnrichedBet = PredictionRecord & {
   match: MatchRecord | null;
 };
+
+const filters: { key: BetFilter; label: string }[] = [
+  { key: "active", label: "Active" },
+  { key: "settled", label: "Settled" },
+  { key: "all", label: "All" },
+];
 
 function getTimestampValue(value: unknown) {
   if (!value) {
@@ -48,12 +55,6 @@ function getTimestampValue(value: unknown) {
   return 0;
 }
 
-const filters: { key: BetFilter; label: string }[] = [
-  { key: "active", label: "Active" },
-  { key: "settled", label: "Settled" },
-  { key: "all", label: "All" },
-];
-
 export default function MyBetsTab() {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
@@ -63,6 +64,9 @@ export default function MyBetsTab() {
   const [isLoadingPredictions, setIsLoadingPredictions] = useState(true);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isDesktop = width >= 1024;
+  const isCompact = width < 820;
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches(
@@ -139,7 +143,6 @@ export default function MyBetsTab() {
     }),
     [bets]
   );
-  const isDesktop = width >= 1024;
 
   if (isLoadingPredictions || isLoadingMatches) {
     return (
@@ -160,13 +163,18 @@ export default function MyBetsTab() {
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={[styles.header, isDesktop && styles.headerDesktop]}>
-            <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
-              Bet History
-            </Text>
-            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
-            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-              Track active picks, settled outcomes, and profit across matches.
-            </Text>
+            <View style={[styles.headerTopRow, isDesktop && styles.headerTopRowDesktop]}>
+              <View style={styles.headerTextWrap}>
+                <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
+                  Bet History
+                </Text>
+                <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
+                <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+                  Track active picks, settled outcomes, and profit across matches.
+                </Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            </View>
           </View>
 
           {error ? (
@@ -208,20 +216,20 @@ export default function MyBetsTab() {
             ))}
           </View>
 
-          <View style={styles.listCard}>
-            <Text style={styles.listTitle}>
-              {activeFilter === "active"
-                ? "Open Bets"
-                : activeFilter === "settled"
-                  ? "Settled Bets"
-                  : "All Bets"}
-            </Text>
+          <View style={styles.tableWrap}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, styles.matchCol]}>Match</Text>
+              <Text style={[styles.tableHeaderText, styles.teamsCol]}>Teams</Text>
+              <Text style={[styles.tableHeaderText, styles.pickCol]}>Your Bet</Text>
+              <Text style={[styles.tableHeaderText, styles.statusCol]}>Status</Text>
+            </View>
 
             {filteredBets.length ? (
               filteredBets.map((bet) => (
-                <BetRow
+                <BetTableRow
                   key={bet.id}
                   bet={bet}
+                  isCompact={isCompact}
                   onOpen={() => {
                     if (bet.match) {
                       router.push({
@@ -236,22 +244,30 @@ export default function MyBetsTab() {
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No bets in this section</Text>
                 <Text style={styles.emptyText}>
-                  Place a prediction from the Matches tab and it will show up here.
+                  Place a prediction from Home and it will show up here.
                 </Text>
               </View>
             )}
           </View>
         </View>
       </ScrollView>
+
+      <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }
 
-function BetRow({ bet, onOpen }: { bet: EnrichedBet; onOpen: () => void }) {
-  const matchLabel = bet.match
-    ? `${bet.match.teamAShort} vs ${bet.match.teamBShort}`
-    : "Unknown match";
-  const teamLabel =
+function BetTableRow({
+  bet,
+  isCompact,
+  onOpen,
+}: {
+  bet: EnrichedBet;
+  isCompact: boolean;
+  onOpen: () => void;
+}) {
+  const matchLabel = bet.match ? `Match ${bet.match.matchNumber}` : "Unknown";
+  const pickedShortCode =
     bet.match == null
       ? "Unknown"
       : bet.selectedTeam === "teamA"
@@ -259,39 +275,76 @@ function BetRow({ bet, onOpen }: { bet: EnrichedBet; onOpen: () => void }) {
         : bet.match.teamBShort;
 
   return (
-    <View style={styles.betRow}>
-      <View style={styles.betTop}>
-        <Text style={styles.betMatch}>{matchLabel}</Text>
-        <StatusBadge status={bet.status} />
+    <Pressable
+      style={[styles.row, bet.match && styles.rowPressable]}
+      onPress={bet.match ? onOpen : undefined}
+      disabled={!bet.match}
+    >
+      <Text style={[styles.rowMatchText, styles.matchCol]}>{matchLabel}</Text>
+
+      <View style={[styles.teamsCol, styles.teamsCell]}>
+        <TeamCell
+          shortCode={bet.match?.teamAShort ?? "--"}
+          fullName={bet.match?.teamAName ?? "Unknown"}
+          align="left"
+          isCompact={isCompact}
+        />
+        <Text style={[styles.vsText, isCompact && styles.vsTextCompact]}>VS</Text>
+        <TeamCell
+          shortCode={bet.match?.teamBShort ?? "--"}
+          fullName={bet.match?.teamBName ?? "Unknown"}
+          align="right"
+          isCompact={isCompact}
+        />
       </View>
 
-      <Text style={styles.betSubline}>
-        Picked {teamLabel} - Rs. {bet.amount.toLocaleString("en-IN")}
-      </Text>
-
-      <View style={styles.betMetaRow}>
-        <Text style={styles.betMeta}>
-          {bet.status === "pending"
-            ? "Awaiting result"
-            : `Payout Rs. ${bet.payout.toLocaleString("en-IN")}`}
-        </Text>
-        <Text
-          style={[
-            styles.betProfit,
-            bet.profit > 0 && styles.betProfitPositive,
-            bet.profit < 0 && styles.betProfitNegative,
-          ]}
-        >
-          {bet.profit > 0 ? "+" : ""}
-          {bet.profit.toLocaleString("en-IN")}
-        </Text>
+      <View style={styles.pickCol}>
+        <Text style={styles.rowPrimary}>Rs. {bet.amount.toLocaleString("en-IN")}</Text>
+        <Text style={styles.rowSecondary}>on {pickedShortCode}</Text>
       </View>
 
-      {bet.match ? (
-        <Pressable style={styles.linkButton} onPress={onOpen}>
-          <Text style={styles.linkButtonText}>Open Match</Text>
-        </Pressable>
-      ) : null}
+      <View style={[styles.statusCol, styles.statusCell]}>
+        <View style={[styles.statusChip, getStatusChipStyle(bet.status)]}>
+          <Text style={styles.statusText}>{formatBetStatus(bet.status)}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function TeamCell({
+  shortCode,
+  fullName,
+  align,
+  isCompact,
+}: {
+  shortCode: string;
+  fullName: string;
+  align: "left" | "right";
+  isCompact: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.teamCell,
+        isCompact && styles.teamCellCompact,
+        align === "right" && styles.teamCellRight,
+      ]}
+    >
+      {isCompact ? (
+        <>
+          <Text style={styles.teamCodeCompact}>{shortCode}</Text>
+        </>
+      ) : (
+        <>
+          <View style={[styles.teamTextWrap, align === "right" && styles.teamTextWrapRight]}>
+            <Text style={styles.teamCode}>{shortCode}</Text>
+            <Text style={styles.teamName} numberOfLines={2}>
+              {fullName}
+            </Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -313,20 +366,34 @@ function SummaryCard({
   );
 }
 
-function StatusBadge({ status }: { status: PredictionRecord["status"] }) {
-  return (
-    <View
-      style={[
-        styles.statusBadge,
-        status === "pending" && styles.statusPending,
-        status === "won" && styles.statusWon,
-        status === "lost" && styles.statusLost,
-        status === "refunded" && styles.statusRefunded,
-      ]}
-    >
-      <Text style={styles.statusBadgeText}>{status}</Text>
-    </View>
-  );
+function formatBetStatus(status: PredictionRecord["status"]) {
+  switch (status) {
+    case "pending":
+      return "Active";
+    case "won":
+      return "Won";
+    case "lost":
+      return "Lost";
+    case "refunded":
+      return "Refunded";
+    default:
+      return status;
+  }
+}
+
+function getStatusChipStyle(status: PredictionRecord["status"]) {
+  switch (status) {
+    case "pending":
+      return styles.statusActive;
+    case "won":
+      return styles.statusWon;
+    case "lost":
+      return styles.statusLost;
+    case "refunded":
+      return styles.statusRefunded;
+    default:
+      return styles.statusActive;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -349,7 +416,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   pageShellDesktop: {
-    maxWidth: 1040,
+    maxWidth: 1120,
     gap: 24,
   },
   loadingState: {
@@ -365,6 +432,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   header: {
+    gap: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  headerTopRowDesktop: {
+    width: "100%",
+    maxWidth: 720,
+  },
+  headerTextWrap: {
+    flex: 1,
     gap: 8,
   },
   headerDesktop: {
@@ -464,102 +545,161 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: "#F7FAFF",
   },
-  listCard: {
+  tableWrap: {
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",
-    padding: 18,
-    gap: 14,
+    overflow: "hidden",
   },
-  listTitle: {
-    color: "#F7FAFF",
-    fontSize: 21,
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: "#132445",
+    borderBottomWidth: 1,
+    borderBottomColor: "#223A63",
+    gap: 12,
+  },
+  tableHeaderText: {
+    color: "#7FAAFF",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+    textAlign: "center",
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1B2B4A",
+  },
+  rowPressable: {
+    backgroundColor: "#102042",
+  },
+  matchCol: {
+    width: 82,
+  },
+  teamsCol: {
+    flex: 1,
+  },
+  pickCol: {
+    width: 120,
+    alignItems: "center",
+  },
+  statusCol: {
+    width: 84,
+    alignItems: "center",
+  },
+  rowMatchText: {
+    color: "#DDE5F7",
+    fontSize: 13,
     fontWeight: "700",
+    textAlign: "center",
   },
-  betRow: {
-    borderRadius: 18,
-    backgroundColor: "#0E1B36",
-    padding: 16,
+  teamsCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  teamCell: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
-  betTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  teamCellCompact: {
+    flexDirection: "column",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 12,
+    gap: 4,
   },
-  betMatch: {
-    flex: 1,
+  teamCellRight: {
+    justifyContent: "flex-end",
+  },
+  teamTextWrap: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  teamTextWrapRight: {
+    alignItems: "flex-end",
+  },
+  teamCode: {
     color: "#F7FAFF",
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  betSubline: {
-    color: "#9FB0CF",
     fontSize: 15,
-  },
-  betMetaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  betMeta: {
-    color: "#8EA0C1",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  betProfit: {
-    color: "#D7E1F5",
-    fontSize: 16,
     fontWeight: "800",
   },
-  betProfitPositive: {
-    color: "#4AE39A",
-  },
-  betProfitNegative: {
-    color: "#F38B8B",
-  },
-  linkButton: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#14316A",
-  },
-  linkButtonText: {
-    color: "#A8C4FF",
+  teamCodeCompact: {
+    color: "#F7FAFF",
     fontSize: 13,
     fontWeight: "800",
   },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+  teamName: {
+    color: "#8EA0C1",
+    fontSize: 13,
+    lineHeight: 18,
   },
-  statusPending: {
-    backgroundColor: "#17345E",
+  vsText: {
+    color: "#60759D",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  vsTextCompact: {
+    fontSize: 10,
+    marginHorizontal: 2,
+  },
+  rowPrimary: {
+    color: "#F5F8FF",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  rowSecondary: {
+    color: "#8EA0C1",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 3,
+    textAlign: "center",
+  },
+  statusCell: {
+    alignItems: "center",
+  },
+  statusChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+  },
+  statusActive: {
+    backgroundColor: "#16356D",
+    borderColor: "#2E5DB0",
   },
   statusWon: {
-    backgroundColor: "#143323",
+    backgroundColor: "#103222",
+    borderColor: "#1D6E49",
   },
   statusLost: {
-    backgroundColor: "#3A1C1C",
+    backgroundColor: "#35191B",
+    borderColor: "#7A2A2A",
   },
   statusRefunded: {
-    backgroundColor: "#3A3346",
+    backgroundColor: "#342A1A",
+    borderColor: "#7A5A1A",
   },
-  statusBadgeText: {
+  statusText: {
     color: "#F7FAFF",
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: "800",
     textTransform: "uppercase",
   },
   emptyCard: {
-    borderRadius: 18,
-    backgroundColor: "#0E1B36",
-    padding: 18,
+    padding: 22,
     gap: 8,
   },
   emptyTitle: {

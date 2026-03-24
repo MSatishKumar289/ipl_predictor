@@ -16,8 +16,14 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackIcon } from "@/components/BackIcon";
 import { useAuth } from "@/providers/AuthProvider";
-import { formatMatchDate, isMatchLocked, subscribeToMatch } from "@/lib/matches";
+import {
+  formatMatchDate,
+  getBettingState,
+  isMatchLocked,
+  subscribeToMatch,
+} from "@/lib/matches";
 import {
   placeOrEditPrediction,
   subscribeToMatchPredictions,
@@ -44,9 +50,6 @@ export default function MatchDetailScreen() {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
-  const [isSuccessVisible, setIsSuccessVisible] = useState(false);
-  const [successTitle, setSuccessTitle] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,7 +60,6 @@ export default function MatchDetailScreen() {
     setSelection("teamA");
     setAmount("");
     setIsConfirmVisible(false);
-    setIsSuccessVisible(false);
 
     const unsubscribe = subscribeToMatch(
       id,
@@ -128,8 +130,11 @@ export default function MatchDetailScreen() {
   }, [id]);
 
   const locked = match ? isMatchLocked(match.lockAt) : false;
-  const canEdit = !!match && !locked && (!prediction || match.isEditableBeforeLock);
-  const canRevealPredictions = locked || match?.status === "settled" || match?.status === "no_result";
+  const bettingState = match ? getBettingState(match) : null;
+  const canEdit =
+    !!match &&
+    bettingState === "bet_open" &&
+    (!prediction || match.isEditableBeforeLock);
   const isDesktop = width >= 1024;
 
   const resultLabel = useMemo(() => {
@@ -230,19 +235,20 @@ export default function MatchDetailScreen() {
       });
 
       setIsConfirmVisible(false);
-      setSuccessTitle(isEditingPrediction ? "Prediction Updated" : "Prediction Placed");
-      setSuccessMessage(
-        isEditingPrediction
-          ? "Your old bet was reversed and the updated pick is now active."
-          : "Your prediction is now active for this match."
-      );
-      setIsSuccessVisible(true);
+      router.replace("/(tabs)/my-bets");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save prediction.";
 
-      if (message === "Predictions are locked for this match.") {
+      if (
+        message === "Predictions are locked for this match." ||
+        message === "Betting opens 24 hours before the match starts."
+      ) {
         setIsConfirmVisible(false);
-        setToastMessage("Sorry, your bet could not be placed as the match was locked.");
+        setToastMessage(
+          message === "Predictions are locked for this match."
+            ? "Sorry, your bet could not be placed as the match was locked."
+            : "Betting for this match opens 24 hours before the start time."
+        );
         return;
       }
 
@@ -273,10 +279,10 @@ export default function MatchDetailScreen() {
                     return;
                   }
 
-                  router.replace("/(tabs)/matches");
+                  router.replace("/(tabs)/home");
                 }}
               >
-                <Text style={styles.backButtonText}>Back</Text>
+                <BackIcon />
               </Pressable>
             </View>
 
@@ -377,35 +383,31 @@ export default function MatchDetailScreen() {
                 </Pressable>
               ) : (
                 <Text style={styles.lockedText}>
-                  {locked
-                    ? "Predictions are locked for this match."
-                    : "Admin has disabled editing for this fixture."}
+                  {bettingState === "closed"
+                    ? "Betting opens 24 hours before this match starts."
+                    : locked
+                      ? "Predictions are locked for this match."
+                      : "Admin has disabled editing for this fixture."}
                 </Text>
               )}
             </View>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Public Predictions</Text>
-              {canRevealPredictions ? (
-                publicPredictions.length ? (
-                  publicPredictions.map((entry) => (
-                    <View key={entry.id} style={styles.publicRow}>
-                      <Text style={styles.publicName}>{entry.userDisplayName}</Text>
-                      <Text style={styles.publicChoice}>
-                        {teamLabel(currentMatch, entry.selectedTeam)}
-                      </Text>
-                      <Text style={styles.publicAmount}>
-                        Rs. {entry.amount.toLocaleString("en-IN")}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyText}>No predictions placed for this match.</Text>
-                )
+              {publicPredictions.length ? (
+                publicPredictions.map((entry) => (
+                  <View key={entry.id} style={styles.publicRow}>
+                    <Text style={styles.publicName}>{entry.userDisplayName}</Text>
+                    <Text style={styles.publicChoice}>
+                      {teamLabel(currentMatch, entry.selectedTeam)}
+                    </Text>
+                    <Text style={styles.publicAmount}>
+                      Rs. {entry.amount.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
+                ))
               ) : (
-                <Text style={styles.emptyText}>
-                  Predictions become visible to everyone after lock.
-                </Text>
+                <Text style={styles.emptyText}>No predictions placed for this match.</Text>
               )}
             </View>
         </View>
@@ -443,7 +445,11 @@ export default function MatchDetailScreen() {
             <View style={styles.confirmMatchCard}>
               <View style={styles.confirmMatchBody}>
                 <Text style={styles.confirmEyebrow}>
-                  {locked ? "Locked Match" : "Live Tonight"}
+                  {bettingState === "closed"
+                    ? "Opens In 24h Window"
+                    : locked
+                      ? "Locked Match"
+                      : "Live Tonight"}
                 </Text>
                 <Text style={styles.confirmMatchTitle}>
                   {currentMatch.teamAName} vs {currentMatch.teamBName}
@@ -497,39 +503,6 @@ export default function MatchDetailScreen() {
               disabled={isSubmitting}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={isSuccessVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => {
-          setIsSuccessVisible(false);
-        }}
-      >
-        <View style={styles.successOverlay}>
-          <View style={styles.successCard}>
-            <Text style={styles.successTitle}>{successTitle}</Text>
-            <Text style={styles.successText}>{successMessage}</Text>
-
-            <Pressable
-              style={styles.successButton}
-              onPress={() => {
-                setIsSuccessVisible(false);
-                router.replace("/(tabs)/my-bets");
-              }}
-            >
-              <Text style={styles.successButtonText}>Go to My Bets</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.successSecondaryButton}
-              onPress={() => setIsSuccessVisible(false)}
-            >
-              <Text style={styles.successSecondaryButtonText}>Stay Here</Text>
             </Pressable>
           </View>
         </View>
@@ -594,7 +567,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   backButton: {
-    minWidth: 74,
+    width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
@@ -602,11 +575,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#102042",
     borderWidth: 1,
     borderColor: "#223A63",
-  },
-  backButtonText: {
-    color: "#DDE5F7",
-    fontSize: 15,
-    fontWeight: "700",
   },
   loadingState: {
     flex: 1,
@@ -957,57 +925,6 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: "#D7E1F5",
     fontSize: 17,
-    fontWeight: "700",
-  },
-  successOverlay: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "rgba(3, 10, 20, 0.72)",
-  },
-  successCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#101A31",
-    padding: 24,
-    gap: 16,
-  },
-  successTitle: {
-    color: "#F7FAFF",
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  successText: {
-    color: "#AFC0DE",
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  successButton: {
-    height: 56,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2463EB",
-  },
-  successButtonText: {
-    color: "#F7FAFF",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  successSecondaryButton: {
-    height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#1B2740",
-  },
-  successSecondaryButtonText: {
-    color: "#D7E1F5",
-    fontSize: 15,
     fontWeight: "700",
   },
   toastWrap: {

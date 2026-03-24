@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { subscribeToLeaderboardUsers } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
@@ -19,6 +20,7 @@ export default function LeaderboardTab() {
   const [users, setUsers] = useState<UserProfileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToLeaderboardUsers(
@@ -49,29 +51,8 @@ export default function LeaderboardTab() {
   );
 
   const currentUserEntry = useMemo(() => {
-    const directMatch = user ? rankedUsers.find((entry) => entry.uid === user.uid) : null;
-
-    if (directMatch) {
-      return directMatch;
-    }
-
-    if (!user || !profile) {
-      return null;
-    }
-
-    return {
-      uid: user.uid,
-      rank: rankedUsers.length + 1,
-      displayName: profile.displayName,
-      email: profile.email,
-      role: profile.role,
-      balance: profile.balance,
-      points: profile.points,
-      wins: profile.wins,
-      losses: profile.losses,
-      totalPredictions: profile.totalPredictions,
-    };
-  }, [profile, rankedUsers, user]);
+    return user ? rankedUsers.find((entry) => entry.uid === user.uid) ?? null : null;
+  }, [rankedUsers, user]);
 
   const topThree = rankedUsers.slice(0, 3);
   const remainingUsers = rankedUsers.slice(3);
@@ -95,11 +76,18 @@ export default function LeaderboardTab() {
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
           <View style={[styles.header, isDesktop && styles.headerDesktop]}>
-            <Text style={styles.eyebrow}>Season Standings</Text>
-            <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>Leaderboard</Text>
-            <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-              Ranked by points first, then wins, then fewer losses.
-            </Text>
+            <View style={[styles.headerTopRow, isDesktop && styles.headerTopRowDesktop]}>
+              <View style={styles.headerTextWrap}>
+                <Text style={styles.eyebrow}>Season Standings</Text>
+                <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>
+                  Leaderboard
+                </Text>
+                <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
+                  Ranked by points first, then wins, then fewer losses.
+                </Text>
+              </View>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            </View>
           </View>
 
           {error ? (
@@ -190,6 +178,7 @@ export default function LeaderboardTab() {
           )}
         </View>
       </ScrollView>
+      <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -244,6 +233,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   header: {
+    gap: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  headerTopRowDesktop: {
+    width: "100%",
+    maxWidth: 720,
+  },
+  headerTextWrap: {
+    flex: 1,
     gap: 8,
   },
   headerDesktop: {

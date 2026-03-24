@@ -18,6 +18,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { BackIcon } from "@/components/BackIcon";
 import {
   createMatch,
   formatMatchDate,
@@ -72,6 +73,7 @@ export default function AdminScreen() {
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
   const isDesktop = width >= 1024;
+  const useTwoColumnMobileCards = width > 400 && !isDesktop;
 
   if (isAuthLoading) {
     return (
@@ -263,7 +265,7 @@ export default function AdminScreen() {
                   router.replace("/(tabs)/profile");
                 }}
               >
-                <Text style={styles.backButtonText}>Back</Text>
+                <BackIcon />
               </Pressable>
               <View style={styles.headerTextWrap}>
                 <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
@@ -293,6 +295,7 @@ export default function AdminScreen() {
                       isSelected={teamAId === team.id}
                       isDisabled={teamBId === team.id}
                       isDesktop={isDesktop}
+                      useTwoColumnMobileCards={useTwoColumnMobileCards}
                       onPress={() => setTeamAId(team.id)}
                     />
                   ))}
@@ -309,6 +312,7 @@ export default function AdminScreen() {
                       isSelected={teamBId === team.id}
                       isDisabled={teamAId === team.id}
                       isDesktop={isDesktop}
+                      useTwoColumnMobileCards={useTwoColumnMobileCards}
                       onPress={() => setTeamBId(team.id)}
                     />
                   ))}
@@ -626,31 +630,44 @@ function TeamOptionCard({
   isSelected,
   isDisabled,
   isDesktop,
+  useTwoColumnMobileCards,
   onPress,
 }: {
   team: IplTeam;
   isSelected: boolean;
   isDisabled: boolean;
   isDesktop: boolean;
+  useTwoColumnMobileCards: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       style={[
         styles.teamOption,
-        isDesktop ? styles.teamOptionDesktop : styles.teamOptionMobile,
+        isDesktop
+          ? styles.teamOptionDesktop
+          : useTwoColumnMobileCards
+            ? styles.teamOptionMobile
+            : styles.teamOptionMobileSingleColumn,
         isSelected && styles.teamOptionSelected,
         isDisabled && styles.teamOptionDisabled,
       ]}
       onPress={onPress}
       disabled={isDisabled}
     >
-      <Image source={team.logo} style={styles.teamLogo} resizeMode="contain" />
-      <View style={styles.teamTextWrap}>
+      <Image
+        source={team.logo}
+        style={[styles.teamLogo, !isDesktop && styles.teamLogoMobile]}
+        resizeMode="contain"
+      />
+      <View style={[styles.teamTextWrap, !isDesktop && styles.teamTextWrapMobile]}>
         <Text style={[styles.teamCode, isSelected && styles.teamCodeSelected]}>
           {team.shortCode}
         </Text>
-        <Text style={styles.teamNameLabel} numberOfLines={2}>
+        <Text
+          style={[styles.teamNameLabel, !isDesktop && styles.teamNameLabelMobile]}
+          numberOfLines={2}
+        >
           {team.name}
         </Text>
       </View>
@@ -699,7 +716,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
   },
   backButton: {
-    minWidth: 74,
+    width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
@@ -708,11 +725,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#223A63",
     marginTop: 2,
-  },
-  backButtonText: {
-    color: "#DDE5F7",
-    fontSize: 15,
-    fontWeight: "700",
   },
   title: {
     color: "#F5F7FB",
@@ -769,6 +781,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    justifyContent: "space-between",
   },
   teamOption: {
     minHeight: 74,
@@ -787,6 +800,23 @@ const styles = StyleSheet.create({
   },
   teamOptionMobile: {
     width: "48%",
+    minHeight: 104,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  teamOptionMobileSingleColumn: {
+    width: "100%",
+    minHeight: 104,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
   },
   teamOptionSelected: {
     borderColor: "#1E5AE0",
@@ -799,9 +829,18 @@ const styles = StyleSheet.create({
     width: "40%",
     height: 32,
   },
+  teamLogoMobile: {
+    width: 48,
+    height: 48,
+  },
   teamTextWrap: {
     width: "60%",
     gap: 1,
+  },
+  teamTextWrapMobile: {
+    width: "100%",
+    alignItems: "center",
+    gap: 4,
   },
   teamCode: {
     color: "#DDE5F7",
@@ -815,6 +854,11 @@ const styles = StyleSheet.create({
     color: "#9FB0CF",
     fontSize: 9,
     lineHeight: 11,
+  },
+  teamNameLabelMobile: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: "center",
   },
   selectionSummaryCard: {
     borderRadius: 16,

@@ -4,6 +4,7 @@ export type UserProfile = {
   displayName: string;
   email: string;
   phoneNumber?: string | null;
+  loginMethod?: "phone" | "email";
   role: UserRole;
   balance: number;
   points: number;
