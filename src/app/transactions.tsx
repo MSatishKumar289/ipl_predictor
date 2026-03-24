@@ -225,13 +225,6 @@ function SummaryCard({
   );
 }
 
-function humanizeType(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function formatDescription(entry: TransactionRecord) {
   if (entry.referenceType === "match") {
     const matchNumber = entry.note.match(/match\s+(\d+)/i)?.[1];
