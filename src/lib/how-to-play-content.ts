@@ -28,6 +28,16 @@ export const howToPlaySections = [
     ],
   },
   {
+    title: "Leaderboard",
+    items: [
+      "Each winning prediction gives you 3 leaderboard points.",
+      "Players are ranked by points first.",
+      "If points are equal, the player with more wins ranks higher.",
+      "If points and wins are equal, the player with fewer losses ranks higher.",
+      "Your pocket balance is shown on the leaderboard for easy tracking.",
+    ],
+  },
+  {
     title: "Tracking",
     items: [
       "Your active and settled bets are visible on the My Bets screen.",

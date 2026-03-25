@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +18,6 @@ import type { MatchRecord } from "@/lib/match-types";
 type TeamVisual = {
   name: string;
   shortCode: string;
-  logo: number;
 };
 
 const teamByShortCode = new Map(
@@ -73,9 +71,7 @@ export default function FixturesScreen() {
               </View>
               <AppMenuButton onPress={() => setIsMenuOpen(true)} />
             </View>
-            <Text style={styles.subtitle}>
-              Full season fixture list with match timing and current status.
-            </Text>
+            <Text style={styles.subtitle}>Season fixture list with match timing and current status.</Text>
           </View>
 
           {error ? (
@@ -90,7 +86,9 @@ export default function FixturesScreen() {
               <Text style={[styles.tableHeaderText, styles.matchCol]}>Match</Text>
               <Text style={[styles.tableHeaderText, styles.teamsCol]}>Teams</Text>
               <Text style={[styles.tableHeaderText, styles.timeCol]}>Start</Text>
-              <Text style={[styles.tableHeaderText, styles.statusCol]}>Status</Text>
+              <View style={[styles.statusCol, styles.statusHeaderCell]}>
+                <Text style={styles.tableHeaderText}>Status</Text>
+              </View>
             </View>
 
             {isLoading ? (
@@ -105,9 +103,7 @@ export default function FixturesScreen() {
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No fixtures yet</Text>
-                <Text style={styles.emptyText}>
-                  Matches created by admin will appear here automatically.
-                </Text>
+                <Text style={styles.emptyText}>Scheduled fixtures will appear here automatically.</Text>
               </View>
             )}
           </View>
@@ -134,7 +130,6 @@ function FixtureRow({
         <TeamCell
           shortCode={match.teamAShort}
           fullName={match.teamAName}
-          logo={match.teamA?.logo ?? null}
           align="left"
           isCompact={isCompact}
         />
@@ -142,7 +137,6 @@ function FixtureRow({
         <TeamCell
           shortCode={match.teamBShort}
           fullName={match.teamBName}
-          logo={match.teamB?.logo ?? null}
           align="right"
           isCompact={isCompact}
         />
@@ -165,13 +159,11 @@ function FixtureRow({
 function TeamCell({
   shortCode,
   fullName,
-  logo,
   align,
   isCompact,
 }: {
   shortCode: string;
   fullName: string;
-  logo: number | null;
   align: "left" | "right";
   isCompact: boolean;
 }) {
@@ -184,24 +176,15 @@ function TeamCell({
       ]}
     >
       {isCompact ? (
-        <>
-          {logo ? <Image source={logo} style={styles.teamLogo} resizeMode="contain" /> : null}
-          <Text style={styles.teamCodeCompact}>{shortCode}</Text>
-        </>
+        <Text style={styles.teamCodeCompact}>{shortCode}</Text>
       ) : (
         <>
-          {align === "left" && logo ? (
-            <Image source={logo} style={styles.teamLogo} resizeMode="contain" />
-          ) : null}
           <View style={[styles.teamTextWrap, align === "right" && styles.teamTextWrapRight]}>
             <Text style={styles.teamCode}>{shortCode}</Text>
             <Text style={styles.teamName} numberOfLines={2}>
               {fullName}
             </Text>
           </View>
-          {align === "right" && logo ? (
-            <Image source={logo} style={styles.teamLogo} resizeMode="contain" />
-          ) : null}
         </>
       )}
     </View>
@@ -367,6 +350,9 @@ const styles = StyleSheet.create({
   statusCol: {
     width: 96,
   },
+  statusHeaderCell: {
+    alignItems: "flex-end",
+  },
   rowMatchText: {
     color: "#DDE5F7",
     fontSize: 13,
@@ -391,10 +377,6 @@ const styles = StyleSheet.create({
   },
   teamCellRight: {
     justifyContent: "flex-end",
-  },
-  teamLogo: {
-    width: 28,
-    height: 28,
   },
   teamTextWrap: {
     flexShrink: 1,
