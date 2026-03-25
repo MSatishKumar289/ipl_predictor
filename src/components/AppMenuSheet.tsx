@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { router, type Href, usePathname } from "expo-router";
 import {
+  ActivityIndicator,
+  Alert,
   Linking,
   Modal,
   Pressable,
@@ -13,6 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { HamburgerIcon } from "@/components/HamburgerIcon";
+import { useAuth } from "@/providers/AuthProvider";
+import { createReferral } from "@/lib/referrals";
 
 const menuItems: { label: string; href?: Href; action?: () => Promise<void> }[] = [
   { label: "Fixtures", href: "/fixtures" },
@@ -51,10 +55,47 @@ export function AppMenuSheet({
   onClose: () => void;
 }) {
   const pathname = usePathname();
+  const { user, profile } = useAuth();
   const [isReferModalOpen, setIsReferModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [friendName, setFriendName] = useState("");
   const [friendMobile, setFriendMobile] = useState("");
+  const [isSubmittingReferral, setIsSubmittingReferral] = useState(false);
+
+  async function handleSubmitReferral() {
+    if (!user || !profile) {
+      Alert.alert("Profile missing", "Please wait for your profile to load and try again.");
+      return;
+    }
+
+    if (!friendMobile.trim()) {
+      Alert.alert("Missing mobile number", "Enter a valid mobile number.");
+      return;
+    }
+
+    try {
+      setIsSubmittingReferral(true);
+
+      await createReferral({
+        referrerUserId: user.uid,
+        referrerDisplayName: profile.displayName,
+        referrerPhoneNumber: profile.phoneNumber ?? null,
+        referredName: friendName,
+        referredPhoneNumber: friendMobile,
+      });
+
+      setFriendName("");
+      setFriendMobile("");
+      setIsReferModalOpen(false);
+      Alert.alert("Referral sent", "Your referral has been saved successfully.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to send referral right now.";
+      Alert.alert("Referral failed", message);
+    } finally {
+      setIsSubmittingReferral(false);
+    }
+  }
 
   return (
     <>
@@ -137,7 +178,7 @@ export function AppMenuSheet({
 
             <TextInput
               style={styles.referInput}
-              placeholder="Friend's Name*"
+              placeholder="Friend's Name"
               placeholderTextColor="#5F6B82"
               value={friendName}
               onChangeText={setFriendName}
@@ -157,11 +198,23 @@ export function AppMenuSheet({
             </Text>
 
             <View style={styles.referActionRow}>
-              <Pressable style={styles.referSecondaryButton} onPress={() => setIsReferModalOpen(false)}>
+              <Pressable
+                style={styles.referSecondaryButton}
+                onPress={() => setIsReferModalOpen(false)}
+                disabled={isSubmittingReferral}
+              >
                 <Text style={styles.referSecondaryButtonText}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.referSubmitButton}>
-                <Text style={styles.referSubmitButtonText}>Submit</Text>
+              <Pressable
+                style={[styles.referSubmitButton, isSubmittingReferral && styles.buttonDisabled]}
+                onPress={handleSubmitReferral}
+                disabled={isSubmittingReferral}
+              >
+                {isSubmittingReferral ? (
+                  <ActivityIndicator size="small" color="#F7FAFF" />
+                ) : (
+                  <Text style={styles.referSubmitButtonText}>Submit</Text>
+                )}
               </Pressable>
             </View>
           </View>
@@ -342,6 +395,9 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 15,
     fontWeight: "800",
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   logoutOverlay: {
     flex: 1,

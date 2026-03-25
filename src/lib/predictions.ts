@@ -142,6 +142,14 @@ export async function placeOrEditPrediction({
     const existingPrediction = predictionSnapshot.exists()
       ? (predictionSnapshot.data() as Omit<PredictionRecord, "id">)
       : null;
+    const referralRef = liveUser.referralId ? doc(db, "referrals", liveUser.referralId) : null;
+    const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
+    const referralData = referralSnapshot?.exists()
+      ? (referralSnapshot.data() as {
+          status?: string;
+          firstPredictionId?: string | null;
+        })
+      : null;
 
     if (!isBettingOpen(liveMatch)) {
       if (Date.now() >= new Date(liveMatch.lockAt).getTime()) {
@@ -202,6 +210,19 @@ export async function placeOrEditPrediction({
         note: `Placed prediction for match ${match.matchNumber}`,
         createdAt: serverTimestamp(),
       });
+
+      if (
+        referralRef &&
+        referralData?.status === "signed_up" &&
+        !referralData.firstPredictionId
+      ) {
+        transaction.update(referralRef, {
+          status: "first_bet_pending_settlement",
+          firstPredictionId: predictionRef.id,
+          firstMatchId: match.id,
+          updatedAt: serverTimestamp(),
+        });
+      }
 
       return;
     }
