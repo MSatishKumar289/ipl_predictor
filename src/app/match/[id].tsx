@@ -51,6 +51,7 @@ export default function MatchDetailScreen() {
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isEditingPrediction, setIsEditingPrediction] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -60,6 +61,7 @@ export default function MatchDetailScreen() {
     setSelection("teamA");
     setAmount("");
     setIsConfirmVisible(false);
+    setIsEditingPrediction(false);
 
     const unsubscribe = subscribeToMatch(
       id,
@@ -94,6 +96,7 @@ export default function MatchDetailScreen() {
       setPrediction(null);
       setSelection("teamA");
       setAmount("");
+      setIsEditingPrediction(false);
       return;
     }
 
@@ -105,6 +108,7 @@ export default function MatchDetailScreen() {
         setPredictionError(null);
         setSelection(nextPrediction?.selectedTeam ?? "teamA");
         setAmount(nextPrediction ? String(nextPrediction.amount) : "");
+        setIsEditingPrediction(false);
       },
       (error) => {
         setPredictionError(`Your prediction read failed: ${error.message}`);
@@ -135,6 +139,8 @@ export default function MatchDetailScreen() {
     !!match &&
     bettingState === "bet_open" &&
     (!prediction || match.isEditableBeforeLock);
+  const isEditMode = !prediction || isEditingPrediction;
+  const inputsEditable = canEdit && isEditMode;
   const isDesktop = width >= 1024;
 
   const resultLabel = useMemo(() => {
@@ -212,6 +218,15 @@ export default function MatchDetailScreen() {
     }
 
     setIsConfirmVisible(true);
+  }
+
+  function handlePrimaryAction() {
+    if (prediction && !isEditingPrediction) {
+      setIsEditingPrediction(true);
+      return;
+    }
+
+    handleOpenConfirm();
   }
 
   async function handleSubmitPrediction() {
@@ -324,7 +339,7 @@ export default function MatchDetailScreen() {
                     selection === "teamA" && styles.selectionButtonActive,
                   ]}
                   onPress={() => setSelection("teamA")}
-                  disabled={!canEdit}
+                  disabled={!inputsEditable}
                 >
                   <Text
                     style={[
@@ -341,7 +356,7 @@ export default function MatchDetailScreen() {
                     selection === "teamB" && styles.selectionButtonActive,
                   ]}
                   onPress={() => setSelection("teamB")}
-                  disabled={!canEdit}
+                  disabled={!inputsEditable}
                 >
                   <Text
                     style={[
@@ -355,12 +370,12 @@ export default function MatchDetailScreen() {
               </View>
 
               <TextInput
-                style={[styles.input, !canEdit && styles.inputDisabled]}
+                style={[styles.input, !inputsEditable && styles.inputDisabled]}
                 placeholder="Bet amount"
                 placeholderTextColor="#4C5D7C"
                 keyboardType="number-pad"
                 value={amount}
-                editable={canEdit}
+                editable={inputsEditable}
                 onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
               />
 
@@ -374,11 +389,15 @@ export default function MatchDetailScreen() {
               {canEdit ? (
                 <Pressable
                   style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
-                  onPress={handleOpenConfirm}
+                  onPress={handlePrimaryAction}
                   disabled={isSubmitting}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {prediction ? "Review Update" : "Review Prediction"}
+                    {prediction
+                      ? isEditingPrediction
+                        ? "Review Bet"
+                        : "Edit Bet"
+                      : "Review Prediction"}
                   </Text>
                 </Pressable>
               ) : (

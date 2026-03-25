@@ -91,6 +91,7 @@ export default function HomeTab() {
     activeFilter === "upcoming"
       ? sections.upcoming.filter((match) => !sections.today.some((todayMatch) => todayMatch.id === match.id))
       : [];
+  const visibleFutureUpcomingMatches = futureUpcomingMatches.slice(0, 2);
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
@@ -102,9 +103,7 @@ export default function HomeTab() {
             <View style={styles.heroTextWrap}>
               <Text style={styles.eyebrow}>Friends Premier League</Text>
               <Text style={styles.title}>Welcome back, {profile?.displayName || "Player"}</Text>
-              <Text style={styles.subtitle}>
-                Temporary home data is shown here until the live dashboard is wired in.
-              </Text>
+              <Text style={styles.subtitle}>Track fixtures, place picks, and follow standings.</Text>
             </View>
             <AppMenuButton onPress={() => setIsMenuOpen(true)} />
           </View>
@@ -218,17 +217,20 @@ export default function HomeTab() {
                 <EmptyState filter={activeFilter} />
               )}
 
-              {activeFilter === "upcoming" && futureUpcomingMatches.length ? (
+              {activeFilter === "upcoming" && visibleFutureUpcomingMatches.length ? (
                 <View style={styles.listSection}>
                   <Text style={styles.listSectionTitle}>Upcoming matches</Text>
-                  {futureUpcomingMatches.map((match) => (
-                    <CompactMatchRow
-                      key={match.id}
-                      match={match}
-                      prediction={predictions[match.id] ?? null}
-                      onOpen={() => openMatch(match.id)}
-                    />
-                  ))}
+                  <View style={styles.featuredList}>
+                    {visibleFutureUpcomingMatches.map((match) => (
+                      <FeaturedMatchCard
+                        key={match.id}
+                        match={match}
+                        prediction={predictions[match.id] ?? null}
+                        compact={width < 768}
+                        onOpen={() => openMatch(match.id)}
+                      />
+                    ))}
+                  </View>
                 </View>
               ) : null}
             </>
@@ -365,17 +367,15 @@ function SectionHeader({ title, count }: { title: string; count: number }) {
 function EmptyState({ filter }: { filter: MatchFilter }) {
   const message =
     filter === "upcoming"
-      ? "No upcoming matches available yet."
+      ? "No upcoming matches right now."
       : filter === "live"
         ? "No live matches right now."
-        : "No completed matches yet.";
+        : "No completed matches right now.";
 
   return (
     <View style={styles.emptyCard}>
       <Text style={styles.emptyTitle}>{message}</Text>
-      <Text style={styles.emptyText}>
-        Once match data is available in Firestore, this list will fill automatically.
-      </Text>
+      <Text style={styles.emptyText}>New match activity will appear here automatically.</Text>
     </View>
   );
 }
