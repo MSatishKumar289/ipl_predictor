@@ -18,6 +18,7 @@ import {
 
 import { getFirebaseServices } from "./firebase";
 import type { UserProfile, UserProfileRecord } from "./auth-types";
+import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
 const SIGNUP_BONUS = 50000;
 const PHONE_AUTH_DOMAIN = "phone.friendspremierleague.app";
@@ -264,6 +265,7 @@ async function createUserProfile(
     getPhoneNumberFromAuthEmail(resolvedAuthEmail);
   const userRef = doc(db, "users", user.uid);
   const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
+  const referralRef = normalizedPhoneNumber ? doc(db, "referrals", normalizedPhoneNumber) : null;
 
   await runTransaction(db, async (transaction) => {
     const existingUser = await transaction.get(userRef);
@@ -271,6 +273,18 @@ async function createUserProfile(
     if (existingUser.exists()) {
       return;
     }
+
+    const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
+    const referralData =
+      referralSnapshot?.exists() &&
+      (referralSnapshot.data() as { status?: string; referrerUserId?: string; referrerDisplayName?: string })
+        .status === "pending"
+        ? (referralSnapshot.data() as {
+            status: string;
+            referrerUserId: string;
+            referrerDisplayName: string;
+          })
+        : null;
 
     const now = serverTimestamp();
     const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
@@ -280,6 +294,10 @@ async function createUserProfile(
       email: resolvedAuthEmail,
       phoneNumber: normalizedPhoneNumber,
       loginMethod: normalizedPhoneNumber ? "phone" : "email",
+      referralId: referralData && referralRef ? referralRef.id : null,
+      referredByUserId: referralData?.referrerUserId ?? null,
+      referredByDisplayName: referralData?.referrerDisplayName ?? null,
+      hasSeenReferralMessage: referralData ? false : true,
       role: "user",
       balance: openingBalance,
       points: 0,
@@ -289,6 +307,15 @@ async function createUserProfile(
       createdAt: now,
       updatedAt: now,
     });
+
+    if (referralData && referralRef) {
+      transaction.update(referralRef, {
+        referredUserId: user.uid,
+        status: "signed_up",
+        rewardAmount: REFERRAL_REWARD_AMOUNT,
+        updatedAt: now,
+      });
+    }
 
     if (grantSignupBonus) {
       transaction.set(signupBonusRef, {

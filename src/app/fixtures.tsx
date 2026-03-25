@@ -82,11 +82,17 @@ export default function FixturesScreen() {
           ) : null}
 
           <View style={styles.tableWrap}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, styles.matchCol]}>Match</Text>
-              <Text style={[styles.tableHeaderText, styles.teamsCol]}>Teams</Text>
-              <Text style={[styles.tableHeaderText, styles.timeCol]}>Start</Text>
-              <View style={[styles.statusCol, styles.statusHeaderCell]}>
+            <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
+              <View style={[styles.matchCol, isCompact && styles.matchColCompact, styles.headerCellLeft]}>
+                <Text style={styles.tableHeaderText}>Match</Text>
+              </View>
+              <View style={[styles.teamsCol, isCompact && styles.teamsColCompact, styles.headerCellCenter]}>
+                <Text style={styles.tableHeaderText}>Teams</Text>
+              </View>
+              <View style={[styles.timeCol, isCompact && styles.timeColCompact, styles.headerCellLeft]}>
+                <Text style={styles.tableHeaderText}>Start</Text>
+              </View>
+              <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.statusHeaderCell]}>
                 <Text style={styles.tableHeaderText}>Status</Text>
               </View>
             </View>
@@ -122,32 +128,44 @@ function FixtureRow({
   match: MatchRecord & { teamA: TeamVisual | null; teamB: TeamVisual | null };
   isCompact: boolean;
 }) {
+  const teamsContent = isCompact ? (
+    <View style={[styles.teamsCol, styles.teamsColCompact, styles.teamsCellCompact]}>
+      <Text style={styles.teamCodeCompact}>{match.teamAShort}</Text>
+      <Text style={[styles.vsText, styles.vsTextCompactStack]}>VS</Text>
+      <Text style={styles.teamCodeCompact}>{match.teamBShort}</Text>
+    </View>
+  ) : (
+    <View style={[styles.teamsCol, styles.teamsCell]}>
+      <TeamCell
+        shortCode={match.teamAShort}
+        fullName={match.teamAName}
+        align="left"
+        isCompact={false}
+      />
+      <Text style={styles.vsText}>VS</Text>
+      <TeamCell
+        shortCode={match.teamBShort}
+        fullName={match.teamBName}
+        align="right"
+        isCompact={false}
+      />
+    </View>
+  );
+
   return (
-    <View style={styles.row}>
-      <Text style={[styles.rowMatchText, styles.matchCol]}>Match {match.matchNumber}</Text>
+    <View style={[styles.row, isCompact && styles.rowCompact]}>
+      <Text style={[styles.rowMatchText, styles.matchCol, isCompact && styles.matchColCompact]}>
+        Match {match.matchNumber}
+      </Text>
 
-      <View style={[styles.teamsCol, styles.teamsCell]}>
-        <TeamCell
-          shortCode={match.teamAShort}
-          fullName={match.teamAName}
-          align="left"
-          isCompact={isCompact}
-        />
-        <Text style={[styles.vsText, isCompact && styles.vsTextCompact]}>VS</Text>
-        <TeamCell
-          shortCode={match.teamBShort}
-          fullName={match.teamBName}
-          align="right"
-          isCompact={isCompact}
-        />
-      </View>
+      {teamsContent}
 
-      <View style={styles.timeCol}>
+      <View style={[styles.timeCol, isCompact && styles.timeColCompact]}>
         <Text style={styles.rowPrimary}>{formatFixtureDate(match.startAt)}</Text>
         <Text style={styles.rowSecondary}>{formatFixtureTime(match.startAt)}</Text>
       </View>
 
-      <View style={[styles.statusCol, styles.statusCell]}>
+      <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.statusCell]}>
         <View style={[styles.statusChip, getStatusChipStyle(match.status)]}>
           <Text style={styles.statusText}>{formatStatus(match.status)}</Text>
         </View>
@@ -321,6 +339,10 @@ const styles = StyleSheet.create({
     borderBottomColor: "#223A63",
     gap: 12,
   },
+  tableHeaderCompact: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
   tableHeaderText: {
     color: "#7FAAFF",
     fontSize: 12,
@@ -337,21 +359,48 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1B2B4A",
   },
+  rowCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    gap: 8,
+  },
   matchCol: {
     width: 74,
   },
+  matchColCompact: {
+    width: 58,
+  },
   teamsCol: {
     flex: 1,
+  },
+  teamsColCompact: {
+    width: 46,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 46,
   },
   timeCol: {
     width: 88,
     paddingLeft: 12,
   },
+  timeColCompact: {
+    width: 72,
+    paddingLeft: 0,
+  },
   statusCol: {
     width: 96,
   },
+  statusColCompact: {
+    width: 88,
+  },
   statusHeaderCell: {
     alignItems: "flex-end",
+  },
+  headerCellLeft: {
+    alignItems: "flex-start",
+  },
+  headerCellCenter: {
+    alignItems: "center",
   },
   rowMatchText: {
     color: "#DDE5F7",
@@ -362,6 +411,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  teamsCellCompact: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 2,
   },
   teamCell: {
     flex: 1,
@@ -408,6 +462,11 @@ const styles = StyleSheet.create({
   vsTextCompact: {
     fontSize: 10,
     marginHorizontal: 2,
+  },
+  vsTextCompactStack: {
+    fontSize: 10,
+    marginHorizontal: 0,
+    lineHeight: 12,
   },
   rowPrimary: {
     color: "#F5F8FF",

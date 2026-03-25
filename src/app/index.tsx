@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +26,7 @@ const signupBonus = 50000;
 export default function HomeScreen() {
   const { error, isLoading, user } = useAuth();
   const { width } = useWindowDimensions();
+  const { mode: requestedMode } = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<AuthMode>("signup");
   const [displayName, setDisplayName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -32,6 +34,12 @@ export default function HomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isDesktop = width >= 1024;
+
+  useEffect(() => {
+    if (requestedMode === "login" || requestedMode === "signup") {
+      setMode(requestedMode);
+    }
+  }, [requestedMode]);
 
   async function handleSubmit() {
     setSubmitError(null);
@@ -107,7 +115,7 @@ export default function HomeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
+            <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
             <View style={styles.header}>
               <View style={styles.logoBox}>
                 <Image
@@ -116,12 +124,7 @@ export default function HomeScreen() {
                   resizeMode="cover"
                 />
               </View>
-              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>
-                Friends Premier League
-              </Text>
-              <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
-                Private leaderboard, match winner picks, and automatic scorekeeping.
-              </Text>
+              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>FPL</Text>
             </View>
 
             <View style={[styles.card, isDesktop && styles.cardDesktop]}>
@@ -250,11 +253,11 @@ const styles = StyleSheet.create({
   pageShell: {
     width: "100%",
     alignSelf: "center",
-    gap: 30,
+    gap: 18,
   },
   pageShellDesktop: {
     maxWidth: 760,
-    gap: 34,
+    gap: 20,
   },
   loadingState: {
     flex: 1,
@@ -271,7 +274,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 12,
   },
   logoBox: {
     width: 116,
@@ -279,7 +282,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 28,
     overflow: "hidden",
     shadowColor: "#000000",
     shadowOpacity: 0.35,

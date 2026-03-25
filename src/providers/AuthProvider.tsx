@@ -1,9 +1,11 @@
+import { Alert } from "react-native";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 
 import { ensureUserProfile, subscribeToAuth, subscribeToUserProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth-types";
 import { firebaseInitializationError } from "@/lib/firebase";
+import { markReferralMessageSeen } from "@/lib/referrals";
 
 type AuthContextValue = {
   user: User | null;
@@ -95,6 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeAuth?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !profile?.referredByDisplayName || profile.hasSeenReferralMessage) {
+      return;
+    }
+
+    Alert.alert(
+      "Referral Applied",
+      `You were referred by ${profile.referredByDisplayName}.`
+    );
+
+    void markReferralMessageSeen(user.uid);
+  }, [profile, user]);
 
   const value = useMemo(
     () => ({

@@ -139,28 +139,55 @@ export default function TransactionsScreen() {
             </View>
           ) : null}
 
-          <View style={styles.summaryRow}>
-            <SummaryCard label="Credits" value={String(totals.credits)} accent />
-            <SummaryCard label="Debits" value={String(totals.debits)} />
+          <View style={styles.summaryWrap}>
+            <View style={styles.summaryRow}>
+              <SummaryCard label="Credits" value={String(totals.credits)} accent />
+              <SummaryCard label="Debits" value={String(totals.debits)} />
+            </View>
             <SummaryCard
               label="Balance"
               value={`₹ ${(profile?.balance ?? 0).toLocaleString("en-IN")}`}
+              fullWidth
             />
           </View>
 
           <View style={styles.tableWrap}>
             <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
-              <Text style={[styles.tableHeaderText, styles.descriptionCol, styles.descriptionHeaderText]}>
-                Detail
+              <Text
+                style={[
+                  styles.tableHeaderText,
+                  styles.descriptionCol,
+                  styles.descriptionHeaderText,
+                ]}
+              >
+                Ref
               </Text>
-              <Text style={[styles.tableHeaderText, styles.amountCol, isCompact && styles.amountColCompact]}>
+              <Text
+                style={[
+                  styles.tableHeaderText,
+                  styles.amountCol,
+                  isCompact && styles.amountColCompact,
+                ]}
+              >
                 Amount
               </Text>
-              <Text style={[styles.tableHeaderText, styles.operationCol, isCompact && styles.operationColCompact]}>
+              <Text
+                style={[
+                  styles.tableHeaderText,
+                  styles.operationCol,
+                  isCompact && styles.operationColCompact,
+                ]}
+              >
                 Txn
               </Text>
-              <Text style={[styles.tableHeaderText, styles.dateCol, isCompact && styles.dateColCompact]}>
-                Date Time
+              <Text
+                style={[
+                  styles.tableHeaderText,
+                  styles.dateCol,
+                  isCompact && styles.dateColCompact,
+                ]}
+              >
+                Date
               </Text>
             </View>
 
@@ -176,7 +203,9 @@ export default function TransactionsScreen() {
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No transactions yet</Text>
-                <Text style={styles.emptyText}>Your wallet activity will appear here automatically.</Text>
+                <Text style={styles.emptyText}>
+                  Your wallet activity will appear here automatically.
+                </Text>
               </View>
             )}
           </View>
@@ -209,14 +238,21 @@ function TransactionRow({
 
       <View style={[styles.amountCol, isCompact && styles.amountColCompact, styles.amountCell]}>
         <Text style={[styles.rowAmount, isCredit ? styles.amountPositive : styles.amountNegative]}>
-          {isCredit ? "+" : "-"}Rs. {Math.abs(entry.amount).toLocaleString("en-IN")}
+          {isCredit ? "+" : "-"}₹ {Math.abs(entry.amount).toLocaleString("en-IN")}
         </Text>
       </View>
 
-      <View style={[styles.operationCol, isCompact && styles.operationColCompact, styles.operationCell]}>
-        <View style={[styles.operationChip, isCredit ? styles.operationCredit : styles.operationDebit]}>
-          <Text style={styles.operationText}>{isCredit ? "Credit" : "Debit"}</Text>
-        </View>
+      <View
+        style={[styles.operationCol, isCompact && styles.operationColCompact, styles.operationCell]}
+      >
+        <Text
+          style={[
+            styles.operationText,
+            isCredit ? styles.operationCreditText : styles.operationDebitText,
+          ]}
+        >
+          {isCredit ? "Credit" : "Debit"}
+        </Text>
       </View>
 
       <View style={[styles.dateCol, isCompact && styles.dateColCompact]}>
@@ -231,13 +267,15 @@ function SummaryCard({
   label,
   value,
   accent = false,
+  fullWidth = false,
 }: {
   label: string;
   value: string;
   accent?: boolean;
+  fullWidth?: boolean;
 }) {
   return (
-    <View style={[styles.summaryCard, accent && styles.summaryCardAccent]}>
+    <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
       <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
     </View>
@@ -248,6 +286,10 @@ function formatDescription(entry: TransactionRecord) {
   if (entry.referenceType === "match") {
     const matchNumber = entry.note.match(/match\s+(\d+)/i)?.[1];
     return matchNumber ? `Match ${matchNumber}` : "Match";
+  }
+
+  if (entry.referenceType === "referral") {
+    return "Referral Bonus";
   }
 
   return "System";
@@ -342,6 +384,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  summaryWrap: {
+    gap: 12,
+  },
   summaryRow: {
     flexDirection: "row",
     gap: 12,
@@ -354,6 +399,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#102042",
     padding: 16,
     gap: 8,
+  },
+  summaryCardFullWidth: {
+    flex: 0,
+    width: "100%",
   },
   summaryCardAccent: {
     borderColor: "#2A7D56",
@@ -440,9 +489,9 @@ const styles = StyleSheet.create({
   },
   rowDescription: {
     color: "#DDE5F7",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    lineHeight: 20,
+    lineHeight: 18,
     textAlign: "left",
   },
   descriptionHeaderText: {
@@ -452,7 +501,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   rowAmount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   amountPositive: {
@@ -464,25 +513,16 @@ const styles = StyleSheet.create({
   operationCell: {
     alignItems: "center",
   },
-  operationChip: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-  },
-  operationCredit: {
-    backgroundColor: "#103222",
-    borderColor: "#1D6E49",
-  },
-  operationDebit: {
-    backgroundColor: "#35191B",
-    borderColor: "#7A2A2A",
-  },
   operationText: {
-    color: "#F7FAFF",
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: "800",
     textTransform: "uppercase",
+  },
+  operationCreditText: {
+    color: "#4AE39A",
+  },
+  operationDebitText: {
+    color: "#F6B1B1",
   },
   rowPrimary: {
     color: "#F5F8FF",
@@ -492,7 +532,7 @@ const styles = StyleSheet.create({
   },
   rowSecondary: {
     color: "#8EA0C1",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "600",
     marginTop: 3,
     textAlign: "center",

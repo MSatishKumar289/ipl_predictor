@@ -184,13 +184,16 @@ export default function MyBetsTab() {
             </View>
           ) : null}
 
-          <View style={styles.summaryRow}>
-            <SummaryCard label="Active" value={String(totals.active)} />
-            <SummaryCard label="Settled" value={String(totals.settled)} />
+          <View style={styles.summaryWrap}>
+            <View style={styles.summaryRow}>
+              <SummaryCard label="Active" value={String(totals.active)} />
+              <SummaryCard label="Settled" value={String(totals.settled)} />
+            </View>
             <SummaryCard
               label="Profit"
               value={`Rs. ${totals.profit.toLocaleString("en-IN")}`}
               accent={totals.profit >= 0}
+              fullWidth
             />
           </View>
 
@@ -217,11 +220,19 @@ export default function MyBetsTab() {
           </View>
 
           <View style={styles.tableWrap}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, styles.matchCol]}>Match</Text>
-              <Text style={[styles.tableHeaderText, styles.teamsCol]}>Teams</Text>
-              <Text style={[styles.tableHeaderText, styles.pickCol]}>Your Bet</Text>
-              <Text style={[styles.tableHeaderText, styles.statusCol]}>Status</Text>
+            <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
+              <View style={[styles.matchCol, isCompact && styles.matchColCompact, styles.headerCellLeft]}>
+                <Text style={styles.tableHeaderText}>Match</Text>
+              </View>
+              <View style={[styles.teamsCol, isCompact && styles.teamsColCompact, styles.headerCellCenter]}>
+                <Text style={styles.tableHeaderText}>Teams</Text>
+              </View>
+              <View style={[styles.pickCol, isCompact && styles.pickColCompact, styles.headerCellCenter]}>
+                <Text style={styles.tableHeaderText}>Bet</Text>
+              </View>
+              <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.headerCellRight]}>
+                <Text style={styles.tableHeaderText}>Status</Text>
+              </View>
             </View>
 
             {filteredBets.length ? (
@@ -273,37 +284,48 @@ function BetTableRow({
       : bet.selectedTeam === "teamA"
         ? bet.match.teamAShort
         : bet.match.teamBShort;
+  const teamsContent = isCompact ? (
+    <View style={[styles.teamsCol, styles.teamsColCompact, styles.teamsCellCompact]}>
+      <Text style={styles.teamCodeCompact}>{bet.match?.teamAShort ?? "--"}</Text>
+      <Text style={[styles.vsText, styles.vsTextCompactStack]}>VS</Text>
+      <Text style={styles.teamCodeCompact}>{bet.match?.teamBShort ?? "--"}</Text>
+    </View>
+  ) : (
+    <View style={[styles.teamsCol, styles.teamsCell]}>
+      <TeamCell
+        shortCode={bet.match?.teamAShort ?? "--"}
+        fullName={bet.match?.teamAName ?? "Unknown"}
+        align="left"
+        isCompact={false}
+      />
+      <Text style={styles.vsText}>VS</Text>
+      <TeamCell
+        shortCode={bet.match?.teamBShort ?? "--"}
+        fullName={bet.match?.teamBName ?? "Unknown"}
+        align="right"
+        isCompact={false}
+      />
+    </View>
+  );
 
   return (
     <Pressable
-      style={[styles.row, bet.match && styles.rowPressable]}
+      style={[styles.row, isCompact && styles.rowCompact, bet.match && styles.rowPressable]}
       onPress={bet.match ? onOpen : undefined}
       disabled={!bet.match}
     >
-      <Text style={[styles.rowMatchText, styles.matchCol]}>{matchLabel}</Text>
+      <Text style={[styles.rowMatchText, styles.matchCol, isCompact && styles.matchColCompact]}>
+        {matchLabel}
+      </Text>
 
-      <View style={[styles.teamsCol, styles.teamsCell]}>
-        <TeamCell
-          shortCode={bet.match?.teamAShort ?? "--"}
-          fullName={bet.match?.teamAName ?? "Unknown"}
-          align="left"
-          isCompact={isCompact}
-        />
-        <Text style={[styles.vsText, isCompact && styles.vsTextCompact]}>VS</Text>
-        <TeamCell
-          shortCode={bet.match?.teamBShort ?? "--"}
-          fullName={bet.match?.teamBName ?? "Unknown"}
-          align="right"
-          isCompact={isCompact}
-        />
-      </View>
+      {teamsContent}
 
-      <View style={styles.pickCol}>
+      <View style={[styles.pickCol, isCompact && styles.pickColCompact]}>
         <Text style={styles.rowPrimary}>Rs. {bet.amount.toLocaleString("en-IN")}</Text>
         <Text style={styles.rowSecondary}>on {pickedShortCode}</Text>
       </View>
 
-      <View style={[styles.statusCol, styles.statusCell]}>
+      <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.statusCell]}>
         <View style={[styles.statusChip, getStatusChipStyle(bet.status)]}>
           <Text style={styles.statusText}>{formatBetStatus(bet.status)}</Text>
         </View>
@@ -353,13 +375,15 @@ function SummaryCard({
   label,
   value,
   accent = false,
+  fullWidth = false,
 }: {
   label: string;
   value: string;
   accent?: boolean;
+  fullWidth?: boolean;
 }) {
   return (
-    <View style={[styles.summaryCard, accent && styles.summaryCardAccent]}>
+    <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
       <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
     </View>
@@ -489,6 +513,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  summaryWrap: {
+    gap: 12,
+  },
   summaryRow: {
     flexDirection: "row",
     gap: 12,
@@ -502,6 +529,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#102042",
     padding: 16,
     gap: 8,
+  },
+  summaryCardFullWidth: {
+    flexBasis: "100%",
+    width: "100%",
   },
   summaryCardAccent: {
     borderColor: "#2A7D56",
@@ -562,6 +593,10 @@ const styles = StyleSheet.create({
     borderBottomColor: "#223A63",
     gap: 12,
   },
+  tableHeaderCompact: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
   tableHeaderText: {
     color: "#7FAAFF",
     fontSize: 12,
@@ -569,6 +604,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.9,
     textAlign: "center",
+  },
+  headerCellLeft: {
+    alignItems: "flex-start",
+  },
+  headerCellCenter: {
+    alignItems: "center",
+  },
+  headerCellRight: {
+    alignItems: "flex-end",
   },
   row: {
     flexDirection: "row",
@@ -579,34 +623,60 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1B2B4A",
   },
+  rowCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+    gap: 8,
+  },
   rowPressable: {
     backgroundColor: "#102042",
   },
   matchCol: {
     width: 82,
   },
+  matchColCompact: {
+    width: 58,
+  },
   teamsCol: {
     flex: 1,
+  },
+  teamsColCompact: {
+    width: 46,
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 46,
   },
   pickCol: {
     width: 120,
     alignItems: "center",
   },
+  pickColCompact: {
+    width: 86,
+  },
   statusCol: {
     width: 84,
     alignItems: "center",
+  },
+  statusColCompact: {
+    width: 74,
+    alignItems: "flex-end",
   },
   rowMatchText: {
     color: "#DDE5F7",
     fontSize: 13,
     fontWeight: "700",
-    textAlign: "center",
+    textAlign: "left",
   },
   teamsCell: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+  },
+  teamsCellCompact: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 2,
   },
   teamCell: {
     flex: 1,
@@ -654,6 +724,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginHorizontal: 2,
   },
+  vsTextCompactStack: {
+    fontSize: 10,
+    marginHorizontal: 0,
+    lineHeight: 12,
+  },
   rowPrimary: {
     color: "#F5F8FF",
     fontSize: 13,
@@ -668,7 +743,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   statusCell: {
-    alignItems: "center",
+    alignItems: "flex-end",
   },
   statusChip: {
     borderRadius: 999,
