@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,7 @@ export default function LeaderboardTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToLeaderboardUsers(
@@ -96,14 +98,19 @@ export default function LeaderboardTab() {
                 <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
                 <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
                 <Text style={[styles.tableHeaderText, styles.pointsCol]}>Pts</Text>
-                <Text style={[styles.tableHeaderText, styles.recordCol]}>W/L</Text>
-                <Text style={[styles.tableHeaderText, styles.picksCol]}>Picks</Text>
+                {isDesktop ? (
+                  <>
+                    <Text style={[styles.tableHeaderText, styles.recordCol]}>W/L</Text>
+                    <Text style={[styles.tableHeaderText, styles.picksCol]}>Picks</Text>
+                  </>
+                ) : null}
                 <Text style={[styles.tableHeaderText, styles.balanceCol]}>Pocket</Text>
               </View>
               {rankedUsers.map((entry) => {
                 const isCurrentUser = user?.uid === entry.uid;
+                const isExpanded = expandedUserId === entry.uid;
 
-                return (
+                return isDesktop ? (
                   <View key={entry.uid} style={[styles.tableRow, isCurrentUser && styles.tableRowCurrentUser]}>
                     <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>#{entry.rank}</Text>
                     <View style={[styles.nameCol, styles.nameCell]}>
@@ -119,6 +126,40 @@ export default function LeaderboardTab() {
                     <Text style={[styles.tableCell, styles.balanceCol, styles.balanceCell]}>
                       Rs. {entry.balance.toLocaleString("en-IN")}
                     </Text>
+                  </View>
+                ) : (
+                  <View key={entry.uid} style={isCurrentUser && styles.mobileCurrentUserWrap}>
+                    <Pressable
+                      style={[styles.tableRow, isCurrentUser && styles.tableRowCurrentUser]}
+                      onPress={() =>
+                        setExpandedUserId((current) => (current === entry.uid ? null : entry.uid))
+                      }
+                    >
+                      <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>#{entry.rank}</Text>
+                      <View style={[styles.nameCol, styles.nameCell]}>
+                        <Text style={styles.nameText} numberOfLines={1}>
+                          {entry.displayName}
+                        </Text>
+                      </View>
+                      <Text style={[styles.tableCell, styles.pointsCol, styles.pointsCell]}>{entry.points}</Text>
+                      <Text style={[styles.tableCell, styles.balanceCol, styles.balanceCell]}>
+                        Rs. {entry.balance.toLocaleString("en-IN")}
+                      </Text>
+                    </Pressable>
+                    {isExpanded ? (
+                      <View style={[styles.expandedRow, isCurrentUser && styles.expandedRowCurrentUser]}>
+                        <View style={styles.expandedItem}>
+                          <Text style={styles.expandedLabel}>W/L</Text>
+                          <Text style={styles.expandedValue}>
+                            {entry.wins}/{entry.losses}
+                          </Text>
+                        </View>
+                        <View style={styles.expandedItem}>
+                          <Text style={styles.expandedLabel}>Picks</Text>
+                          <Text style={styles.expandedValue}>{entry.totalPredictions}</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })}
@@ -275,8 +316,40 @@ const styles = StyleSheet.create({
     borderTopColor: "#1B2B4A",
   },
   tableRowCurrentUser: {
-    borderWidth: 1,
-    borderColor: "#355AA8",
+    backgroundColor: "#11254A",
+  },
+  mobileCurrentUserWrap: {
+    backgroundColor: "#11254A",
+  },
+  expandedRow: {
+    flexDirection: "row",
+    gap: 18,
+    paddingHorizontal: 14,
+    paddingTop: 0,
+    paddingBottom: 14,
+    backgroundColor: "#0E1B36",
+  },
+  expandedRowCurrentUser: {
+    backgroundColor: "#11254A",
+  },
+  expandedItem: {
+    flex: 1,
+    gap: 4,
+    alignItems: "center",
+  },
+  expandedLabel: {
+    color: "#8EA0C1",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    textAlign: "center",
+  },
+  expandedValue: {
+    color: "#F7FAFF",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
   },
   tableCell: {
     color: "#DDE5F7",

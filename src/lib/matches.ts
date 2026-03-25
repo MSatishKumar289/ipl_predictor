@@ -17,6 +17,7 @@ import { db } from "./firebase";
 import type { UserProfile } from "./auth-types";
 import type { CreateMatchInput, MatchOutcome, MatchRecord, MatchStatus } from "./match-types";
 import type { PredictionRecord } from "./prediction-types";
+import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
 const MATCH_LOCK_MINUTES = 5;
 const BETTING_OPEN_HOURS = 24;
@@ -226,6 +227,14 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         predictionRef: ReturnType<typeof doc>;
         userRef: ReturnType<typeof doc>;
         userData: UserProfile;
+        referralRef: ReturnType<typeof doc> | null;
+        referralData: {
+          referrerUserId?: string;
+          status?: string;
+          firstPredictionId?: string | null;
+        } | null;
+        referrerRef: ReturnType<typeof doc> | null;
+        referrerData: UserProfile | null;
       }
     >();
 
@@ -238,16 +247,52 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         continue;
       }
 
+      const userData = userSnapshot.data() as UserProfile;
+      const referralRef = userData.referralId ? doc(db, "referrals", userData.referralId) : null;
+      const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
+      const referralData = referralSnapshot?.exists()
+        ? (referralSnapshot.data() as {
+            referrerUserId?: string;
+            status?: string;
+            firstPredictionId?: string | null;
+          })
+        : null;
+      const referrerRef =
+        referralData?.referrerUserId && referralData.status === "first_bet_pending_settlement"
+          ? doc(db, "users", referralData.referrerUserId)
+          : null;
+      const referrerSnapshot = referrerRef ? await transaction.get(referrerRef) : null;
+
       predictionUsers.set(predictionSnapshot.id, {
         prediction,
         predictionRef: doc(db, "predictions", predictionSnapshot.id),
         userRef,
-        userData: userSnapshot.data() as UserProfile,
+        userData,
+        referralRef,
+        referralData,
+        referrerRef,
+        referrerData: referrerSnapshot?.exists() ? (referrerSnapshot.data() as UserProfile) : null,
       });
     }
 
-    for (const { prediction, predictionRef, userRef, userData } of predictionUsers.values()) {
+    for (const [predictionId, predictionEntry] of predictionUsers.entries()) {
+      const {
+        prediction,
+        predictionRef,
+        userRef,
+        userData,
+        referralRef,
+        referralData,
+        referrerRef,
+        referrerData,
+      } = predictionEntry;
       const transactionRef = doc(collection(db, "transactions"));
+      const shouldRewardReferral =
+        !!referralRef &&
+        !!referrerRef &&
+        !!referrerData &&
+        referralData?.status === "first_bet_pending_settlement" &&
+        referralData.firstPredictionId === predictionId;
 
       if (winner === "no_result") {
         const refundedBalance = userData.balance + prediction.amount;
@@ -276,6 +321,35 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
           note: `Refund for match ${latestMatch.matchNumber} due to no result`,
           createdAt: serverTimestamp(),
         });
+
+        if (shouldRewardReferral) {
+          const referrerNextBalance = referrerData.balance + REFERRAL_REWARD_AMOUNT;
+          const rewardTransactionRef = doc(collection(db, "transactions"));
+
+          transaction.update(referrerRef, {
+            balance: referrerNextBalance,
+            updatedAt: serverTimestamp(),
+          });
+
+          transaction.update(referralRef, {
+            status: "rewarded",
+            rewardTransactionId: rewardTransactionRef.id,
+            rewardedAt: settlementTime,
+            updatedAt: serverTimestamp(),
+          });
+
+          transaction.set(rewardTransactionRef, {
+            userId: referralData?.referrerUserId,
+            type: "referral_bonus",
+            amount: REFERRAL_REWARD_AMOUNT,
+            balanceBefore: referrerData.balance,
+            balanceAfter: referrerNextBalance,
+            referenceType: "referral",
+            referenceId: referralRef.id,
+            note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
+            createdAt: serverTimestamp(),
+          });
+        }
 
         continue;
       }
@@ -311,6 +385,35 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
           createdAt: serverTimestamp(),
         });
 
+        if (shouldRewardReferral) {
+          const referrerNextBalance = referrerData.balance + REFERRAL_REWARD_AMOUNT;
+          const rewardTransactionRef = doc(collection(db, "transactions"));
+
+          transaction.update(referrerRef, {
+            balance: referrerNextBalance,
+            updatedAt: serverTimestamp(),
+          });
+
+          transaction.update(referralRef, {
+            status: "rewarded",
+            rewardTransactionId: rewardTransactionRef.id,
+            rewardedAt: settlementTime,
+            updatedAt: serverTimestamp(),
+          });
+
+          transaction.set(rewardTransactionRef, {
+            userId: referralData?.referrerUserId,
+            type: "referral_bonus",
+            amount: REFERRAL_REWARD_AMOUNT,
+            balanceBefore: referrerData.balance,
+            balanceAfter: referrerNextBalance,
+            referenceType: "referral",
+            referenceId: referralRef.id,
+            note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
+            createdAt: serverTimestamp(),
+          });
+        }
+
         continue;
       }
 
@@ -326,6 +429,35 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         settledAt: settlementTime,
         updatedAt: serverTimestamp(),
       });
+
+      if (shouldRewardReferral) {
+        const referrerNextBalance = referrerData.balance + REFERRAL_REWARD_AMOUNT;
+        const rewardTransactionRef = doc(collection(db, "transactions"));
+
+        transaction.update(referrerRef, {
+          balance: referrerNextBalance,
+          updatedAt: serverTimestamp(),
+        });
+
+        transaction.update(referralRef, {
+          status: "rewarded",
+          rewardTransactionId: rewardTransactionRef.id,
+          rewardedAt: settlementTime,
+          updatedAt: serverTimestamp(),
+        });
+
+        transaction.set(rewardTransactionRef, {
+          userId: referralData?.referrerUserId,
+          type: "referral_bonus",
+          amount: REFERRAL_REWARD_AMOUNT,
+          balanceBefore: referrerData.balance,
+          balanceAfter: referrerNextBalance,
+          referenceType: "referral",
+          referenceId: referralRef.id,
+          note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
+          createdAt: serverTimestamp(),
+        });
+      }
     }
 
     transaction.update(matchRef, {

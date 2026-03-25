@@ -1,12 +1,169 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState } from "react";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { BackButton } from "@/components/BackButton";
+import {
+  REFERRAL_REWARD_AMOUNT,
+  getReferralStatusLabel,
+  subscribeToUserReferrals,
+} from "@/lib/referrals";
+import type { ReferralRecord } from "@/lib/referral-types";
+import { useAuth } from "@/providers/AuthProvider";
+
+function getTimestampValue(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (typeof value === "object" && value && "toMillis" in value && typeof value.toMillis === "function") {
+    return value.toMillis();
+  }
+
+  if (typeof value === "object" && value && "seconds" in value && typeof value.seconds === "number") {
+    return value.seconds * 1000;
+  }
+
+  return 0;
+}
+
+function formatDateTime(value: unknown) {
+  const timestamp = getTimestampValue(value);
+
+  if (!timestamp) {
+    return "--";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(timestamp));
+}
+
+function formatReward(referral: ReferralRecord) {
+  if (referral.status !== "rewarded") {
+    return "Pending";
+  }
+
+  return `₹ ${referral.rewardAmount.toLocaleString("en-IN")}`;
+}
+
+function StatusChip({ status }: { status: ReferralRecord["status"] }) {
+  const isRewarded = status === "rewarded";
+  const isPending = status === "pending";
+
+  return (
+    <View
+      style={[
+        styles.statusChip,
+        isRewarded
+          ? styles.statusChipRewarded
+          : isPending
+            ? styles.statusChipPending
+            : styles.statusChipProgress,
+      ]}
+    >
+      <Text style={styles.statusChipText}>{getReferralStatusLabel(status)}</Text>
+    </View>
+  );
+}
+
+function ReferralRow({
+  referral,
+  isCompact,
+}: {
+  referral: ReferralRecord;
+  isCompact: boolean;
+}) {
+  return (
+    <View style={[styles.row, isCompact && styles.rowCompact]}>
+      <Text style={[styles.cellText, styles.nameCol]} numberOfLines={2}>
+        {referral.referredName?.trim() || "--"}
+      </Text>
+      <Text style={[styles.cellText, styles.mobileCol]} numberOfLines={1}>
+        {referral.referredPhoneNumber}
+      </Text>
+      <View style={[styles.statusCol, styles.statusCell]}>
+        <StatusChip status={referral.status} />
+      </View>
+      <Text
+        style={[
+          styles.cellText,
+          styles.rewardCol,
+          referral.status === "rewarded" ? styles.rewardText : styles.pendingText,
+        ]}
+        numberOfLines={1}
+      >
+        {formatReward(referral)}
+      </Text>
+      <Text style={[styles.cellText, styles.dateCol]} numberOfLines={2}>
+        {formatDateTime(referral.rewardedAt ?? referral.createdAt)}
+      </Text>
+    </View>
+  );
+}
 
 export default function MyReferralsScreen() {
+  const { user } = useAuth();
+  const { width } = useWindowDimensions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isCompact = width < 720;
+
+  useEffect(() => {
+    if (!user) {
+      setReferrals([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    const unsubscribe = subscribeToUserReferrals(
+      user.uid,
+      (nextReferrals) => {
+        setReferrals(nextReferrals);
+        setError(null);
+        setIsLoading(false);
+      },
+      (nextError) => {
+        setReferrals([]);
+        setError(`Referrals read failed: ${nextError.message}`);
+        setIsLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [user]);
+
+  const totals = useMemo(
+    () => ({
+      total: referrals.length,
+      rewarded: referrals.filter((entry) => entry.status === "rewarded").length,
+      earned: referrals
+        .filter((entry) => entry.status === "rewarded")
+        .reduce((sum, entry) => sum + (entry.rewardAmount || REFERRAL_REWARD_AMOUNT), 0),
+    }),
+    [referrals]
+  );
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -22,27 +179,88 @@ export default function MyReferralsScreen() {
               <AppMenuButton onPress={() => setIsMenuOpen(true)} />
             </View>
             <Text style={styles.subtitle}>
-              Track referred friends, bonus credit status, and referral activity.
+              Track sent referrals, signup progress, and bonus credit status.
             </Text>
           </View>
 
-          <View style={styles.tableWrap}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
-              <Text style={[styles.tableHeaderText, styles.mobileCol]}>Mobile</Text>
-              <Text style={[styles.tableHeaderText, styles.bonusCol]}>Bonus Credited</Text>
-              <Text style={[styles.tableHeaderText, styles.dateCol]}>Date Time</Text>
+          <View style={styles.summaryWrap}>
+            <View style={styles.summaryRow}>
+              <SummaryCard label="Total" value={String(totals.total)} accent />
+              <SummaryCard label="Rewarded" value={String(totals.rewarded)} />
             </View>
+            <SummaryCard
+              label="Earned"
+              value={`₹ ${totals.earned.toLocaleString("en-IN")}`}
+              fullWidth
+            />
+          </View>
 
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>No data found.</Text>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Firestore error</Text>
+              <Text style={styles.errorText}>{error}</Text>
             </View>
+          ) : null}
+
+          <View style={styles.tableWrap}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View>
+                <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
+                  <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
+                  <Text style={[styles.tableHeaderText, styles.mobileCol]}>Mobile</Text>
+                  <Text style={[styles.tableHeaderText, styles.statusCol]}>Status</Text>
+                  <Text style={[styles.tableHeaderText, styles.rewardCol]}>Bonus</Text>
+                  <Text style={[styles.tableHeaderText, styles.dateCol]}>Date Time</Text>
+                </View>
+
+                {isLoading ? (
+                  <View style={styles.loadingState}>
+                    <ActivityIndicator size="large" color="#2463EB" />
+                    <Text style={styles.loadingText}>Loading referrals...</Text>
+                  </View>
+                ) : referrals.length ? (
+                  referrals.map((referral) => (
+                    <ReferralRow
+                      key={referral.id}
+                      referral={referral}
+                      isCompact={isCompact}
+                    />
+                  ))
+                ) : (
+                  <View style={styles.emptyRow}>
+                    <Text style={styles.emptyTitle}>No referrals sent yet</Text>
+                    <Text style={styles.emptyText}>
+                      Referred users and their bonus status will appear here automatically.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </ScrollView>
 
       <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  accent = false,
+  fullWidth = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  fullWidth?: boolean;
+}) {
+  return (
+    <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
+      <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
+      <Text style={styles.summaryValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -92,6 +310,65 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingRight: 8,
   },
+  summaryWrap: {
+    gap: 12,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  summaryCard: {
+    flex: 1,
+    minWidth: 160,
+    minHeight: 84,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#102042",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: "space-between",
+  },
+  summaryCardFullWidth: {
+    flexBasis: "100%",
+    width: "100%",
+  },
+  summaryCardAccent: {
+    borderColor: "#2D8F68",
+  },
+  summaryLabel: {
+    color: "#8EA0C1",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  summaryLabelAccent: {
+    color: "#5FE4A9",
+  },
+  summaryValue: {
+    color: "#F7FAFF",
+    fontSize: 26,
+    fontWeight: "800",
+  },
+  errorCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#5F2E44",
+    backgroundColor: "#2A1320",
+    padding: 18,
+    gap: 8,
+  },
+  errorTitle: {
+    color: "#FFD7E2",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  errorText: {
+    color: "#F2B7C9",
+    fontSize: 14,
+    lineHeight: 20,
+  },
   tableWrap: {
     borderRadius: 24,
     borderWidth: 1,
@@ -109,6 +386,9 @@ const styles = StyleSheet.create({
     borderBottomColor: "#223A63",
     gap: 12,
   },
+  tableHeaderCompact: {
+    paddingHorizontal: 14,
+  },
   tableHeaderText: {
     color: "#7FAAFF",
     fontSize: 11,
@@ -116,27 +396,105 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.9,
   },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 74,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1A2B4B",
+    gap: 12,
+  },
+  rowCompact: {
+    minHeight: 68,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   nameCol: {
-    flex: 1.3,
+    width: 180,
   },
   mobileCol: {
+    width: 130,
+  },
+  statusCol: {
     width: 170,
   },
-  bonusCol: {
-    width: 160,
+  rewardCol: {
+    width: 110,
   },
   dateCol: {
-    width: 120,
+    width: 130,
   },
-  emptyRow: {
-    paddingVertical: 28,
-    paddingHorizontal: 18,
+  cellText: {
+    color: "#F1F5FF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  statusCell: {
+    alignItems: "flex-start",
+  },
+  statusChip: {
+    minHeight: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
   },
+  statusChipPending: {
+    backgroundColor: "#253557",
+    borderColor: "#38507C",
+  },
+  statusChipProgress: {
+    backgroundColor: "#193561",
+    borderColor: "#2E69C4",
+  },
+  statusChipRewarded: {
+    backgroundColor: "#153728",
+    borderColor: "#2D8F68",
+  },
+  statusChipText: {
+    color: "#F7FAFF",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  rewardText: {
+    color: "#5FE4A9",
+  },
+  pendingText: {
+    color: "#AFC0DE",
+  },
+  loadingState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 36,
+    gap: 12,
+  },
+  loadingText: {
+    color: "#AFC0DE",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  emptyRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 34,
+    paddingHorizontal: 18,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: "#F7FAFF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
   emptyText: {
-    color: "#DDE5F7",
-    fontSize: 16,
-    fontWeight: "500",
+    color: "#AFC0DE",
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: "center",
+    maxWidth: 420,
   },
 });

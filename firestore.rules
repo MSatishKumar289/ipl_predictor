@@ -42,6 +42,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /referrals/{referralId} {
+      allow read: if signedIn();
+      allow list: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.referrerUserId == request.auth.uid &&
+        request.resource.data.referredPhoneNumber is string &&
+        request.resource.data.referredPhoneNumber.size() > 0;
+      allow update: if signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.referrerUserId == request.auth.uid ||
+          request.resource.data.referredUserId == request.auth.uid
+        );
+      allow delete: if false;
+    }
+
     match /transactions/{transactionId} {
       allow read: if signedIn();
       allow create: if signedIn() || isAdmin();
