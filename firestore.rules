@@ -12,11 +12,22 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
+    function hasValidDisplayName() {
+      return request.resource.data.displayName is string &&
+        request.resource.data.displayName.size() > 0;
+    }
+
+    function isKeepingSameDisplayName() {
+      return request.resource.data.displayName == resource.data.displayName;
+    }
+
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId && hasValidDisplayName();
       allow get: if signedIn();
       allow list: if signedIn();
-      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow update: if signedIn() &&
+        (request.auth.uid == userId || isAdmin()) &&
+        (isKeepingSameDisplayName() || hasValidDisplayName());
       allow delete: if false;
     }
 

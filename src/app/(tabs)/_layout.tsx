@@ -1,14 +1,18 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function TabsLayout() {
   const { isLoading, user } = useAuth();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isDesktop = width >= 1024;
   const desktopTabBarWidth = Math.min(width - 32, 960);
+  const mobileTabBarPaddingBottom = Math.max(insets.bottom, 10);
+  const mobileTabBarHeight = 62 + mobileTabBarPaddingBottom;
 
   if (isLoading) {
     return (
@@ -35,9 +39,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: "#0C1831",
           borderTopColor: "#20324F",
-          height: 72,
+          height: isDesktop ? 72 : mobileTabBarHeight,
           paddingTop: 8,
-          paddingBottom: 10,
+          paddingBottom: isDesktop ? 10 : mobileTabBarPaddingBottom,
           ...(isDesktop
             ? {
                 width: desktopTabBarWidth,

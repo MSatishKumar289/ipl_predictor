@@ -38,6 +38,7 @@ type PendingSettlement = {
 } | null;
 
 type PickerMode = "date" | "time" | null;
+type AdminMatchView = "live" | "results";
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -55,6 +56,8 @@ export default function AdminScreen() {
   const [pickerValue, setPickerValue] = useState(new Date());
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
   const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
+  const [isSettling, setIsSettling] = useState(false);
+  const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
 
@@ -67,13 +70,23 @@ export default function AdminScreen() {
     return unsubscribe;
   }, []);
 
-  const recentMatches = useMemo(() => {
-    return [...matches].reverse();
+  const liveMatches = useMemo(() => {
+    return [...matches].filter((match) => match.status === "locked").reverse();
   }, [matches]);
+  const resultMatches = useMemo(() => {
+    return [...matches]
+      .filter(
+        (match) =>
+          match.status === "settled" ||
+          match.status === "no_result" ||
+          match.status === "completed"
+      )
+      .reverse();
+  }, [matches]);
+  const visibleMatches = activeMatchView === "live" ? liveMatches : resultMatches;
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
   const isDesktop = width >= 1024;
-  const useTwoColumnMobileCards = width > 400 && !isDesktop;
 
   if (isAuthLoading) {
     return (
@@ -198,17 +211,20 @@ export default function AdminScreen() {
   }
 
   async function confirmSettlement() {
-    if (!pendingSettlement) {
+    if (!pendingSettlement || isSettling) {
       return;
     }
 
     try {
+      setIsSettling(true);
       await settleMatchOutcome(pendingSettlement.matchId, pendingSettlement.winner, adminUserId);
       setPendingSettlement(null);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to settle the match result.";
       Alert.alert("Settlement failed", message);
+    } finally {
+      setIsSettling(false);
     }
   }
 
@@ -240,6 +256,39 @@ export default function AdminScreen() {
     Platform.OS === "web"
       ? null
       : (require("@react-native-community/datetimepicker").default as any);
+  const settlementDialog = pendingSettlement ? (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setPendingSettlement(null)} />
+      <View style={styles.confirmCard}>
+        <Text style={styles.confirmTitle}>Confirm Match Result</Text>
+        <Text style={styles.confirmText}>
+          Set result for {pendingSettlement.matchLabel} as {pendingSettlement.outcomeLabel}?
+        </Text>
+        <Text style={styles.confirmHint}>
+          This will run settlement for all predictions on that match.
+        </Text>
+
+        <Pressable
+          style={[styles.confirmPrimaryButton, isSettling && styles.buttonDisabled]}
+          onPress={confirmSettlement}
+          disabled={isSettling}
+        >
+          {isSettling ? (
+            <ActivityIndicator size="small" color="#F7FAFF" />
+          ) : (
+            <Text style={styles.confirmPrimaryButtonText}>Confirm Settlement</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={[styles.confirmSecondaryButton, isSettling && styles.buttonDisabled]}
+          onPress={() => setPendingSettlement(null)}
+          disabled={isSettling}
+        >
+          <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -294,8 +343,6 @@ export default function AdminScreen() {
                       team={team}
                       isSelected={teamAId === team.id}
                       isDisabled={teamBId === team.id}
-                      isDesktop={isDesktop}
-                      useTwoColumnMobileCards={useTwoColumnMobileCards}
                       onPress={() => setTeamAId(team.id)}
                     />
                   ))}
@@ -311,8 +358,6 @@ export default function AdminScreen() {
                       team={team}
                       isSelected={teamBId === team.id}
                       isDisabled={teamAId === team.id}
-                      isDesktop={isDesktop}
-                      useTwoColumnMobileCards={useTwoColumnMobileCards}
                       onPress={() => setTeamBId(team.id)}
                     />
                   ))}
@@ -397,13 +442,41 @@ export default function AdminScreen() {
             </View>
 
           <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-            <Text style={styles.cardTitle}>Manage Live Matches</Text>
+            <Text style={styles.cardTitle}>Manage Matches</Text>
+            <View style={styles.viewTabs}>
+              <Pressable
+                style={[styles.viewTab, activeMatchView === "live" && styles.viewTabActive]}
+                onPress={() => setActiveMatchView("live")}
+              >
+                <Text
+                  style={[
+                    styles.viewTabText,
+                    activeMatchView === "live" && styles.viewTabTextActive,
+                  ]}
+                >
+                  Live
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.viewTab, activeMatchView === "results" && styles.viewTabActive]}
+                onPress={() => setActiveMatchView("results")}
+              >
+                <Text
+                  style={[
+                    styles.viewTabText,
+                    activeMatchView === "results" && styles.viewTabTextActive,
+                  ]}
+                >
+                  Results
+                </Text>
+              </Pressable>
+            </View>
             {isLoadingMatches ? (
               <View style={styles.loadingState}>
                 <ActivityIndicator size="small" color="#1E5AE0" />
               </View>
-            ) : recentMatches.length ? (
-              recentMatches.map((match) => (
+            ) : visibleMatches.length ? (
+              visibleMatches.map((match) => (
                 <View key={match.id} style={styles.matchRow}>
                   {(() => {
                     const settlementLocked =
@@ -482,43 +555,29 @@ export default function AdminScreen() {
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>No fixtures yet. Create your first match above.</Text>
+              <Text style={styles.emptyText}>
+                {activeMatchView === "live"
+                  ? "No live matches right now."
+                  : "No settled results recorded yet."}
+              </Text>
             )}
           </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal
-        visible={!!pendingSettlement}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPendingSettlement(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setPendingSettlement(null)} />
-          <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Confirm Match Result</Text>
-            <Text style={styles.confirmText}>
-              Set result for {pendingSettlement?.matchLabel || "this match"} as{" "}
-              {pendingSettlement?.outcomeLabel || "selected outcome"}?
-            </Text>
-            <Text style={styles.confirmHint}>
-              This will run settlement for all predictions on that match.
-            </Text>
-
-            <Pressable style={styles.confirmPrimaryButton} onPress={confirmSettlement}>
-              <Text style={styles.confirmPrimaryButtonText}>Confirm Settlement</Text>
-            </Pressable>
-            <Pressable
-              style={styles.confirmSecondaryButton}
-              onPress={() => setPendingSettlement(null)}
-            >
-              <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      {Platform.OS === "web" ? (
+        settlementDialog
+      ) : (
+        <Modal
+          visible={!!pendingSettlement}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPendingSettlement(null)}
+        >
+          {settlementDialog}
+        </Modal>
+      )}
 
       {NativeDateTimePicker && pickerMode ? (
         <NativeDateTimePicker
@@ -629,48 +688,27 @@ function TeamOptionCard({
   team,
   isSelected,
   isDisabled,
-  isDesktop,
-  useTwoColumnMobileCards,
   onPress,
 }: {
   team: IplTeam;
   isSelected: boolean;
   isDisabled: boolean;
-  isDesktop: boolean;
-  useTwoColumnMobileCards: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       style={[
         styles.teamOption,
-        isDesktop
-          ? styles.teamOptionDesktop
-          : useTwoColumnMobileCards
-            ? styles.teamOptionMobile
-            : styles.teamOptionMobileSingleColumn,
+        styles.teamOptionCompact,
         isSelected && styles.teamOptionSelected,
         isDisabled && styles.teamOptionDisabled,
       ]}
       onPress={onPress}
       disabled={isDisabled}
     >
-      <Image
-        source={team.logo}
-        style={[styles.teamLogo, !isDesktop && styles.teamLogoMobile]}
-        resizeMode="contain"
-      />
-      <View style={[styles.teamTextWrap, !isDesktop && styles.teamTextWrapMobile]}>
-        <Text style={[styles.teamCode, isSelected && styles.teamCodeSelected]}>
-          {team.shortCode}
-        </Text>
-        <Text
-          style={[styles.teamNameLabel, !isDesktop && styles.teamNameLabelMobile]}
-          numberOfLines={2}
-        >
-          {team.name}
-        </Text>
-      </View>
+      <Text style={[styles.teamCode, styles.teamCodeCompact, isSelected && styles.teamCodeSelected]}>
+        {team.shortCode}
+      </Text>
     </Pressable>
   );
 }
@@ -759,6 +797,33 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
   },
+  viewTabs: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  viewTab: {
+    minWidth: 92,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  viewTabActive: {
+    borderColor: "#1E5AE0",
+    backgroundColor: "#16356D",
+  },
+  viewTabText: {
+    color: "#9FB0CF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  viewTabTextActive: {
+    color: "#F7FAFF",
+  },
   input: {
     borderRadius: 16,
     borderWidth: 1,
@@ -784,39 +849,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   teamOption: {
-    minHeight: 74,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#334C76",
     backgroundColor: "#162645",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
   },
-  teamOptionDesktop: {
-    width: "19%",
-  },
-  teamOptionMobile: {
+  teamOptionCompact: {
     width: "48%",
-    minHeight: 104,
-    paddingHorizontal: 10,
+    minHeight: 56,
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  teamOptionMobileSingleColumn: {
-    width: "100%",
-    minHeight: 104,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
   },
   teamOptionSelected: {
     borderColor: "#1E5AE0",
@@ -825,40 +869,16 @@ const styles = StyleSheet.create({
   teamOptionDisabled: {
     opacity: 0.4,
   },
-  teamLogo: {
-    width: "40%",
-    height: 32,
-  },
-  teamLogoMobile: {
-    width: 48,
-    height: 48,
-  },
-  teamTextWrap: {
-    width: "60%",
-    gap: 1,
-  },
-  teamTextWrapMobile: {
-    width: "100%",
-    alignItems: "center",
-    gap: 4,
-  },
   teamCode: {
     color: "#DDE5F7",
     fontSize: 15,
     fontWeight: "800",
   },
+  teamCodeCompact: {
+    fontSize: 18,
+  },
   teamCodeSelected: {
     color: "#F7FAFF",
-  },
-  teamNameLabel: {
-    color: "#9FB0CF",
-    fontSize: 9,
-    lineHeight: 11,
-  },
-  teamNameLabelMobile: {
-    fontSize: 11,
-    lineHeight: 14,
-    textAlign: "center",
   },
   selectionSummaryCard: {
     borderRadius: 16,
@@ -1055,10 +1075,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   modalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     padding: 24,
     backgroundColor: "rgba(3, 10, 20, 0.62)",
+    zIndex: 20,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,

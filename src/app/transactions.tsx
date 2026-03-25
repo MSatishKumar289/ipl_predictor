@@ -4,6 +4,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -49,11 +50,13 @@ function getTimestampValue(value: unknown) {
 }
 
 export default function TransactionsScreen() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const { width } = useWindowDimensions();
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isCompact = width < 720;
 
   useEffect(() => {
     if (!user) {
@@ -139,16 +142,26 @@ export default function TransactionsScreen() {
           <View style={styles.summaryRow}>
             <SummaryCard label="Credits" value={String(totals.credits)} accent />
             <SummaryCard label="Debits" value={String(totals.debits)} />
+            <SummaryCard
+              label="Balance"
+              value={`₹ ${(profile?.balance ?? 0).toLocaleString("en-IN")}`}
+            />
           </View>
 
           <View style={styles.tableWrap}>
-            <View style={styles.tableHeader}>
+            <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
               <Text style={[styles.tableHeaderText, styles.descriptionCol, styles.descriptionHeaderText]}>
-                Description
+                Detail
               </Text>
-              <Text style={[styles.tableHeaderText, styles.amountCol]}>Amount</Text>
-              <Text style={[styles.tableHeaderText, styles.operationCol]}>Operation</Text>
-              <Text style={[styles.tableHeaderText, styles.dateCol]}>Date Time</Text>
+              <Text style={[styles.tableHeaderText, styles.amountCol, isCompact && styles.amountColCompact]}>
+                Amount
+              </Text>
+              <Text style={[styles.tableHeaderText, styles.operationCol, isCompact && styles.operationColCompact]}>
+                Txn
+              </Text>
+              <Text style={[styles.tableHeaderText, styles.dateCol, isCompact && styles.dateColCompact]}>
+                Date Time
+              </Text>
             </View>
 
             {isLoading ? (
@@ -157,13 +170,13 @@ export default function TransactionsScreen() {
                 <Text style={styles.loadingText}>Loading transactions...</Text>
               </View>
             ) : visibleTransactions.length ? (
-              visibleTransactions.map((entry) => <TransactionRow key={entry.id} entry={entry} />)
+              visibleTransactions.map((entry) => (
+                <TransactionRow key={entry.id} entry={entry} isCompact={isCompact} />
+              ))
             ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No transactions yet</Text>
-                <Text style={styles.emptyText}>
-                  Credits, debits, and bet movements will appear here automatically.
-                </Text>
+                <Text style={styles.emptyText}>Your wallet activity will appear here automatically.</Text>
               </View>
             )}
           </View>
@@ -179,28 +192,34 @@ function isHiddenTransactionType(type: string) {
   return type === "bet_edit_refund" || type === "bet_edit_placed";
 }
 
-function TransactionRow({ entry }: { entry: TransactionRecord }) {
+function TransactionRow({
+  entry,
+  isCompact,
+}: {
+  entry: TransactionRecord;
+  isCompact: boolean;
+}) {
   const isCredit = entry.amount > 0;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isCompact && styles.rowCompact]}>
       <Text style={[styles.rowDescription, styles.descriptionCol]} numberOfLines={2}>
         {formatDescription(entry)}
       </Text>
 
-      <View style={[styles.amountCol, styles.amountCell]}>
+      <View style={[styles.amountCol, isCompact && styles.amountColCompact, styles.amountCell]}>
         <Text style={[styles.rowAmount, isCredit ? styles.amountPositive : styles.amountNegative]}>
           {isCredit ? "+" : "-"}Rs. {Math.abs(entry.amount).toLocaleString("en-IN")}
         </Text>
       </View>
 
-      <View style={[styles.operationCol, styles.operationCell]}>
+      <View style={[styles.operationCol, isCompact && styles.operationColCompact, styles.operationCell]}>
         <View style={[styles.operationChip, isCredit ? styles.operationCredit : styles.operationDebit]}>
           <Text style={styles.operationText}>{isCredit ? "Credit" : "Debit"}</Text>
         </View>
       </View>
 
-      <View style={styles.dateCol}>
+      <View style={[styles.dateCol, isCompact && styles.dateColCompact]}>
         <Text style={styles.rowPrimary}>{formatDate(entry.createdAt)}</Text>
         <Text style={styles.rowSecondary}>{formatTime(entry.createdAt)}</Text>
       </View>
@@ -341,7 +360,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: "#9FB0CF",
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.8,
@@ -371,6 +390,11 @@ const styles = StyleSheet.create({
     borderBottomColor: "#223A63",
     gap: 12,
   },
+  tableHeaderCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
   tableHeaderText: {
     color: "#7FAAFF",
     fontSize: 11,
@@ -388,17 +412,31 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1B2B4A",
   },
+  rowCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    gap: 8,
+  },
   descriptionCol: {
     flex: 2.7,
   },
   amountCol: {
     width: 138,
   },
+  amountColCompact: {
+    width: 86,
+  },
   operationCol: {
     width: 74,
   },
+  operationColCompact: {
+    width: 64,
+  },
   dateCol: {
     width: 92,
+  },
+  dateColCompact: {
+    width: 72,
   },
   rowDescription: {
     color: "#DDE5F7",

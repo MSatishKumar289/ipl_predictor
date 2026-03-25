@@ -15,7 +15,7 @@ import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function LeaderboardTab() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const [users, setUsers] = useState<UserProfileRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,13 +49,6 @@ export default function LeaderboardTab() {
       })),
     [users]
   );
-
-  const currentUserEntry = useMemo(() => {
-    return user ? rankedUsers.find((entry) => entry.uid === user.uid) ?? null : null;
-  }, [rankedUsers, user]);
-
-  const topThree = rankedUsers.slice(0, 3);
-  const remainingUsers = rankedUsers.slice(3);
 
   if (isLoading) {
     return (
@@ -97,77 +90,42 @@ export default function LeaderboardTab() {
             </View>
           ) : null}
 
-          {currentUserEntry ? (
-            <View style={styles.meCard}>
-              <Text style={styles.meLabel}>Your Rank</Text>
-              <View style={styles.meRow}>
-                <Text style={styles.meRank}>#{currentUserEntry.rank}</Text>
-                <View style={styles.meBody}>
-                  <Text style={styles.meName}>{currentUserEntry.displayName}</Text>
-                  <Text style={styles.meMeta}>
-                    {currentUserEntry.points} pts - {currentUserEntry.wins}W -{" "}
-                    {currentUserEntry.losses}L - {currentUserEntry.totalPredictions} picks
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ) : null}
-
           {rankedUsers.length ? (
-            <>
-              <View style={[styles.podiumRow, isDesktop && styles.podiumRowDesktop]}>
-                {topThree.map((entry, index) => (
-                  <View
-                    key={entry.uid}
-                    style={[
-                      styles.podiumCard,
-                      index === 0 && styles.podiumCardFirst,
-                      index === 1 && styles.podiumCardSecond,
-                      index === 2 && styles.podiumCardThird,
-                    ]}
-                  >
-                    <Text style={styles.podiumRank}>#{entry.rank}</Text>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{getInitials(entry.displayName)}</Text>
+            <View style={styles.tableCard}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
+                <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
+                <Text style={[styles.tableHeaderText, styles.pointsCol]}>Pts</Text>
+                <Text style={[styles.tableHeaderText, styles.recordCol]}>W/L</Text>
+                <Text style={[styles.tableHeaderText, styles.picksCol]}>Picks</Text>
+                <Text style={[styles.tableHeaderText, styles.balanceCol]}>Pocket</Text>
+              </View>
+              {rankedUsers.map((entry) => {
+                const isCurrentUser = user?.uid === entry.uid;
+
+                return (
+                  <View key={entry.uid} style={[styles.tableRow, isCurrentUser && styles.tableRowCurrentUser]}>
+                    <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>#{entry.rank}</Text>
+                    <View style={[styles.nameCol, styles.nameCell]}>
+                      <Text style={styles.nameText} numberOfLines={1}>
+                        {entry.displayName}
+                      </Text>
                     </View>
-                    <Text style={styles.podiumName}>{entry.displayName}</Text>
-                    <Text style={styles.podiumPoints}>{entry.points} pts</Text>
-                    <Text style={styles.podiumMeta}>
-                      {entry.wins}W / {entry.losses}L
+                    <Text style={[styles.tableCell, styles.pointsCol, styles.pointsCell]}>{entry.points}</Text>
+                    <Text style={[styles.tableCell, styles.recordCol]}>
+                      {entry.wins}/{entry.losses}
+                    </Text>
+                    <Text style={[styles.tableCell, styles.picksCol]}>{entry.totalPredictions}</Text>
+                    <Text style={[styles.tableCell, styles.balanceCol, styles.balanceCell]}>
+                      Rs. {entry.balance.toLocaleString("en-IN")}
                     </Text>
                   </View>
-                ))}
-              </View>
-
-              <View style={styles.listCard}>
-                <Text style={styles.listTitle}>Full Table</Text>
-                {remainingUsers.map((entry) => {
-                  const isCurrentUser = user?.uid === entry.uid;
-
-                  return (
-                    <View
-                      key={entry.uid}
-                      style={[styles.row, isCurrentUser && styles.rowCurrentUser]}
-                    >
-                      <Text style={styles.rowRank}>#{entry.rank}</Text>
-                      <View style={styles.rowAvatar}>
-                        <Text style={styles.rowAvatarText}>{getInitials(entry.displayName)}</Text>
-                      </View>
-                      <View style={styles.rowBody}>
-                        <Text style={styles.rowName}>{entry.displayName}</Text>
-                        <Text style={styles.rowMeta}>
-                          {entry.wins}W - {entry.losses}L - {entry.totalPredictions} picks
-                        </Text>
-                      </View>
-                      <Text style={styles.rowPoints}>{entry.points}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </>
+                );
+              })}
+            </View>
           ) : (
-            <View style={styles.listCard}>
-              <Text style={styles.listTitle}>Full Table</Text>
+            <View style={styles.tableCard}>
+              <Text style={styles.listTitle}>Leaderboard</Text>
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No leaderboard data yet</Text>
                 <Text style={styles.emptyText}>
@@ -181,19 +139,6 @@ export default function LeaderboardTab() {
       <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
-}
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-
-  if (!parts.length) {
-    return "P";
-  }
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
 }
 
 const styles = StyleSheet.create({
@@ -291,174 +236,101 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  meCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "#355AA8",
-    backgroundColor: "#102042",
-    padding: 20,
-    gap: 12,
-  },
-  meLabel: {
-    color: "#7FAAFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  meRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  meRank: {
-    color: "#F5F8FF",
-    fontSize: 34,
-    fontWeight: "900",
-  },
-  meBody: {
-    flex: 1,
-    gap: 4,
-  },
-  meName: {
-    color: "#F5F8FF",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  meMeta: {
-    color: "#AFC0E0",
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  podiumRow: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "stretch",
-  },
-  podiumRowDesktop: {
-    justifyContent: "center",
-  },
-  podiumCard: {
-    flex: 1,
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: "center",
-    gap: 10,
-  },
-  podiumCardFirst: {
-    backgroundColor: "#1E2B4C",
-    borderColor: "#5E83D1",
-  },
-  podiumCardSecond: {
-    backgroundColor: "#16233F",
-    borderColor: "#485F8E",
-  },
-  podiumCardThird: {
-    backgroundColor: "#142038",
-    borderColor: "#3D4D73",
-  },
-  podiumRank: {
-    color: "#DCE7FF",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 999,
-    backgroundColor: "#2456C9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    color: "#F5F8FF",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  podiumName: {
-    color: "#F5F8FF",
-    fontSize: 16,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  podiumPoints: {
-    color: "#7FB0FF",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  podiumMeta: {
-    color: "#9FB0CF",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  listCard: {
+  tableCard: {
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",
-    padding: 18,
-    gap: 12,
+    overflow: "hidden",
   },
   listTitle: {
     color: "#F7FAFF",
     fontSize: 21,
     fontWeight: "700",
+    paddingHorizontal: 18,
+    paddingTop: 18,
     marginBottom: 4,
   },
-  row: {
+  tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    borderRadius: 18,
+    backgroundColor: "#132445",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  tableHeaderText: {
+    color: "#7FAAFF",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+  },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#0E1B36",
     paddingHorizontal: 14,
     paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#1B2B4A",
   },
-  rowCurrentUser: {
+  tableRowCurrentUser: {
     borderWidth: 1,
     borderColor: "#355AA8",
   },
-  rowRank: {
-    width: 34,
+  tableCell: {
+    color: "#DDE5F7",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  rankCol: {
+    width: 40,
+  },
+  rankCell: {
     color: "#8EA0C1",
-    fontSize: 16,
     fontWeight: "800",
   },
-  rowAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    backgroundColor: "#1E5AE0",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowAvatarText: {
-    color: "#F7FAFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  rowBody: {
+  nameCol: {
     flex: 1,
-    gap: 3,
   },
-  rowName: {
+  nameCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 8,
+  },
+  nameText: {
     color: "#F7FAFF",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
   },
-  rowMeta: {
-    color: "#9FB0CF",
-    fontSize: 13,
+  pointsCol: {
+    width: 40,
   },
-  rowPoints: {
+  pointsCell: {
     color: "#7FB0FF",
-    fontSize: 20,
     fontWeight: "900",
+    textAlign: "center",
+  },
+  recordCol: {
+    width: 44,
+    textAlign: "center",
+  },
+  picksCol: {
+    width: 42,
+    textAlign: "center",
+  },
+  balanceCol: {
+    width: 86,
+    textAlign: "right",
+  },
+  balanceCell: {
+    color: "#73E2A8",
+    fontSize: 12,
+    fontWeight: "700",
   },
   emptyCard: {
-    borderRadius: 18,
     backgroundColor: "#0E1B36",
+    margin: 18,
     padding: 18,
     gap: 8,
   },

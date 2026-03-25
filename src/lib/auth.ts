@@ -22,6 +22,20 @@ import type { UserProfile, UserProfileRecord } from "./auth-types";
 const SIGNUP_BONUS = 50000;
 const PHONE_AUTH_DOMAIN = "phone.friendspremierleague.app";
 
+function normalizeDisplayName(displayName: string) {
+  return displayName.trim();
+}
+
+function validateDisplayName(displayName: string) {
+  const normalized = normalizeDisplayName(displayName);
+
+  if (!normalized) {
+    throw new Error("Display name is required.");
+  }
+
+  return normalized;
+}
+
 function normalizePhoneNumber(phoneNumber: string) {
   return phoneNumber.replace(/[^0-9]/g, "");
 }
@@ -74,12 +88,13 @@ export async function signUpWithPhone({
   password: string;
 }) {
   const { auth } = getFirebaseServices();
+  const normalizedDisplayName = validateDisplayName(displayName);
   const normalizedPhoneNumber = validatePhoneNumber(phoneNumber);
   const authEmail = buildPhoneAuthEmail(normalizedPhoneNumber);
 
   const credential = await createUserWithEmailAndPassword(auth, authEmail, password);
 
-  await updateProfile(credential.user, { displayName });
+  await updateProfile(credential.user, { displayName: normalizedDisplayName });
 
   return credential.user;
 }
@@ -212,8 +227,12 @@ export async function ensureUserProfile(
     return updatedSnapshot.exists() ? (updatedSnapshot.data() as UserProfile) : profile;
   }
 
+  const resolvedDisplayName = validateDisplayName(
+    displayName ?? user.displayName ?? user.email?.split("@")[0] ?? ""
+  );
+
   await createUserProfile(user, {
-    displayName: displayName ?? user.displayName ?? user.email?.split("@")[0] ?? "Player",
+    displayName: resolvedDisplayName,
     phoneNumber,
     authEmail,
     grantSignupBonus: grantSignupBonusIfNew,
@@ -238,6 +257,7 @@ async function createUserProfile(
   }
 ) {
   const { db } = getFirebaseServices();
+  const normalizedDisplayName = validateDisplayName(displayName);
   const resolvedAuthEmail = authEmail ?? user.email ?? "";
   const normalizedPhoneNumber =
     (phoneNumber ? normalizePhoneNumber(phoneNumber) : null) ??
@@ -256,7 +276,7 @@ async function createUserProfile(
     const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
 
     transaction.set(userRef, {
-      displayName,
+      displayName: normalizedDisplayName,
       email: resolvedAuthEmail,
       phoneNumber: normalizedPhoneNumber,
       loginMethod: normalizedPhoneNumber ? "phone" : "email",

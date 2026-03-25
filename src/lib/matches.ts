@@ -219,6 +219,15 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
     }
 
     const settlementTime = new Date().toISOString();
+    const predictionUsers = new Map<
+      string,
+      {
+        prediction: Omit<PredictionRecord, "id">;
+        predictionRef: ReturnType<typeof doc>;
+        userRef: ReturnType<typeof doc>;
+        userData: UserProfile;
+      }
+    >();
 
     for (const predictionSnapshot of predictionSnapshots.docs) {
       const prediction = predictionSnapshot.data() as Omit<PredictionRecord, "id">;
@@ -229,8 +238,15 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         continue;
       }
 
-      const userData = userSnapshot.data() as UserProfile;
-      const predictionRef = doc(db, "predictions", predictionSnapshot.id);
+      predictionUsers.set(predictionSnapshot.id, {
+        prediction,
+        predictionRef: doc(db, "predictions", predictionSnapshot.id),
+        userRef,
+        userData: userSnapshot.data() as UserProfile,
+      });
+    }
+
+    for (const { prediction, predictionRef, userRef, userData } of predictionUsers.values()) {
       const transactionRef = doc(collection(db, "transactions"));
 
       if (winner === "no_result") {
