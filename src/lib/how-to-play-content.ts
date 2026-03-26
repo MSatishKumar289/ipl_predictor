@@ -2,7 +2,7 @@ export const howToPlaySections = [
   {
     title: "General",
     items: [
-      "You start with Rs. 50,000 in-game balance.",
+      "You start with 50,000 coins in-game balance.",
       "This game is meant for fun among friends only. No real money is involved.",
       "Use your balance carefully because extra balance is not credited automatically.",
     ],

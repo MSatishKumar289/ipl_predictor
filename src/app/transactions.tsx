@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -12,7 +12,10 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { BackButton } from "@/components/BackButton";
+import { CoinAmount } from "@/components/CoinAmount";
 import { db } from "@/lib/firebase";
+import { subscribeToUserPredictions } from "@/lib/predictions";
+import type { PredictionRecord } from "@/lib/prediction-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type TransactionRecord = {
@@ -38,11 +41,21 @@ function getTimestampValue(value: unknown) {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  if (typeof value === "object" && value && "toMillis" in value && typeof value.toMillis === "function") {
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
     return value.toMillis();
   }
 
-  if (typeof value === "object" && value && "seconds" in value && typeof value.seconds === "number") {
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
     return value.seconds * 1000;
   }
 
@@ -53,6 +66,7 @@ export default function TransactionsScreen() {
   const { user, profile } = useAuth();
   const { width } = useWindowDimensions();
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [predictions, setPredictions] = useState<Record<string, PredictionRecord>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -61,14 +75,12 @@ export default function TransactionsScreen() {
   useEffect(() => {
     if (!user) {
       setTransactions([]);
+      setPredictions({});
       setIsLoading(false);
       return;
     }
 
-    const transactionsQuery = query(
-      collection(db, "transactions"),
-      where("userId", "==", user.uid)
-    );
+    const transactionsQuery = query(collection(db, "transactions"), where("userId", "==", user.uid));
 
     const unsubscribe = onSnapshot(
       transactionsQuery,
@@ -97,21 +109,39 @@ export default function TransactionsScreen() {
     return unsubscribe;
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setPredictions({});
+      return;
+    }
+
+    const unsubscribe = subscribeToUserPredictions(user.uid, (nextPredictions) => {
+      setPredictions(
+        nextPredictions.reduce<Record<string, PredictionRecord>>((accumulator, prediction) => {
+          accumulator[prediction.matchId] = prediction;
+          return accumulator;
+        }, {})
+      );
+    });
+
+    return unsubscribe;
+  }, [user]);
+
   const totals = useMemo(
     () => ({
       credits: transactions
-        .filter((entry) => !isHiddenTransactionType(entry.type))
+        .filter((entry) => isVisibleTransaction(entry, predictions))
         .filter((entry) => entry.amount > 0).length,
       debits: transactions
-        .filter((entry) => !isHiddenTransactionType(entry.type))
+        .filter((entry) => isVisibleTransaction(entry, predictions))
         .filter((entry) => entry.amount < 0).length,
     }),
-    [transactions]
+    [predictions, transactions]
   );
 
   const visibleTransactions = useMemo(
-    () => transactions.filter((entry) => !isHiddenTransactionType(entry.type)),
-    [transactions]
+    () => getVisibleTransactions(transactions, predictions),
+    [predictions, transactions]
   );
 
   return (
@@ -146,7 +176,14 @@ export default function TransactionsScreen() {
             </View>
             <SummaryCard
               label="Balance"
-              value={`₹ ${(profile?.balance ?? 0).toLocaleString("en-IN")}`}
+              value={
+                <CoinAmount
+                  value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+                  size={20}
+                  weight="800"
+                  iconSize={15}
+                />
+              }
               fullWidth
             />
           </View>
@@ -198,7 +235,12 @@ export default function TransactionsScreen() {
               </View>
             ) : visibleTransactions.length ? (
               visibleTransactions.map((entry) => (
-                <TransactionRow key={entry.id} entry={entry} isCompact={isCompact} />
+                <TransactionRow
+                  key={entry.id}
+                  entry={entry}
+                  prediction={getLinkedPrediction(entry, predictions)}
+                  isCompact={isCompact}
+                />
               ))
             ) : (
               <View style={styles.emptyCard}>
@@ -217,18 +259,91 @@ export default function TransactionsScreen() {
   );
 }
 
-function isHiddenTransactionType(type: string) {
-  return type === "bet_edit_refund" || type === "bet_edit_placed";
+function isVisibleTransaction(
+  entry: TransactionRecord,
+  predictions: Record<string, PredictionRecord>
+) {
+  if (
+    entry.type === "bet_edit_refund" ||
+    entry.type === "bet_edit_placed" ||
+    entry.type === "bet_deleted_refund" ||
+    entry.type === "match_refund_no_result"
+  ) {
+    return false;
+  }
+
+  if (entry.type !== "bet_placed") {
+    return true;
+  }
+
+  const linkedPrediction = getLinkedPrediction(entry, predictions);
+
+  if (!linkedPrediction) {
+    return false;
+  }
+
+  return linkedPrediction.status !== "refunded";
+}
+
+function getVisibleTransactions(
+  transactions: TransactionRecord[],
+  predictions: Record<string, PredictionRecord>
+) {
+  const latestBetPlacedByMatch = new Map<string, string>();
+
+  for (const entry of transactions) {
+    if (entry.type !== "bet_placed" || entry.referenceType !== "match" || !entry.referenceId) {
+      continue;
+    }
+
+    if (!latestBetPlacedByMatch.has(entry.referenceId)) {
+      latestBetPlacedByMatch.set(entry.referenceId, entry.id);
+    }
+  }
+
+  return transactions.filter((entry) => {
+    if (!isVisibleTransaction(entry, predictions)) {
+      return false;
+    }
+
+    if (entry.type !== "bet_placed" || entry.referenceType !== "match" || !entry.referenceId) {
+      return true;
+    }
+
+    return latestBetPlacedByMatch.get(entry.referenceId) === entry.id;
+  });
+}
+
+function getLinkedPrediction(
+  entry: TransactionRecord,
+  predictions: Record<string, PredictionRecord>
+) {
+  if (entry.referenceType !== "match" || !entry.referenceId) {
+    return null;
+  }
+
+  return predictions[entry.referenceId] ?? null;
+}
+
+function getDisplayAmount(entry: TransactionRecord, prediction: PredictionRecord | null) {
+  if (entry.type === "bet_placed" && prediction) {
+    return -prediction.amount;
+  }
+
+  return entry.amount;
 }
 
 function TransactionRow({
   entry,
+  prediction,
   isCompact,
 }: {
   entry: TransactionRecord;
+  prediction: PredictionRecord | null;
   isCompact: boolean;
 }) {
-  const isCredit = entry.amount > 0;
+  const displayAmount = getDisplayAmount(entry, prediction);
+  const isCredit = displayAmount > 0;
 
   return (
     <View style={[styles.row, isCompact && styles.rowCompact]}>
@@ -237,9 +352,16 @@ function TransactionRow({
       </Text>
 
       <View style={[styles.amountCol, isCompact && styles.amountColCompact, styles.amountCell]}>
-        <Text style={[styles.rowAmount, isCredit ? styles.amountPositive : styles.amountNegative]}>
-          {isCredit ? "+" : "-"}₹ {Math.abs(entry.amount).toLocaleString("en-IN")}
-        </Text>
+        <CoinAmount
+          value={Math.abs(displayAmount).toLocaleString("en-IN")}
+          prefix={isCredit ? "+" : "-"}
+          color={isCredit ? "#4AE39A" : "#F6B1B1"}
+          size={13}
+          weight="800"
+          iconSize={11}
+          align="center"
+          textStyle={styles.rowAmount}
+        />
       </View>
 
       <View
@@ -270,14 +392,20 @@ function SummaryCard({
   fullWidth = false,
 }: {
   label: string;
-  value: string;
+  value: string | ReactNode;
   accent?: boolean;
   fullWidth?: boolean;
 }) {
   return (
-    <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
+    <View
+      style={[
+        styles.summaryCard,
+        fullWidth && styles.summaryCardFullWidth,
+        accent && styles.summaryCardAccent,
+      ]}
+    >
       <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
+      {typeof value === "string" ? <Text style={styles.summaryValue}>{value}</Text> : value}
     </View>
   );
 }
@@ -503,12 +631,6 @@ const styles = StyleSheet.create({
   rowAmount: {
     fontSize: 13,
     fontWeight: "800",
-  },
-  amountPositive: {
-    color: "#4AE39A",
-  },
-  amountNegative: {
-    color: "#F6B1B1",
   },
   operationCell: {
     alignItems: "center",

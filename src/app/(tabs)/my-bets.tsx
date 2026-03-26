@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { CoinAmount } from "@/components/CoinAmount";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -170,7 +171,7 @@ export default function MyBetsTab() {
                 </Text>
                 <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
                 <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-                  Track active picks, settled outcomes, and profit across matches.
+                  Track active picks, settled outcomes, and totals across matches.
                 </Text>
               </View>
               <AppMenuButton onPress={() => setIsMenuOpen(true)} />
@@ -190,8 +191,17 @@ export default function MyBetsTab() {
               <SummaryCard label="Settled" value={String(totals.settled)} />
             </View>
             <SummaryCard
-              label="Profit"
-              value={`Rs. ${totals.profit.toLocaleString("en-IN")}`}
+              label="Net"
+              value={
+                <CoinAmount
+                  value={Math.abs(totals.profit).toLocaleString("en-IN")}
+                  prefix={totals.profit < 0 ? "-" : undefined}
+                  size={20}
+                  weight="800"
+                  iconSize={15}
+                  color="#F7FAFF"
+                />
+              }
               accent={totals.profit >= 0}
               fullWidth
             />
@@ -321,7 +331,14 @@ function BetTableRow({
       {teamsContent}
 
       <View style={[styles.pickCol, isCompact && styles.pickColCompact]}>
-        <Text style={styles.rowPrimary}>Rs. {bet.amount.toLocaleString("en-IN")}</Text>
+        <CoinAmount
+          value={bet.amount.toLocaleString("en-IN")}
+          size={13}
+          weight="700"
+          iconSize={11}
+          align="center"
+          textStyle={styles.rowPrimary}
+        />
         <Text style={styles.rowSecondary}>on {pickedShortCode}</Text>
       </View>
 
@@ -378,14 +395,14 @@ function SummaryCard({
   fullWidth = false,
 }: {
   label: string;
-  value: string;
+  value: string | ReactNode;
   accent?: boolean;
   fullWidth?: boolean;
 }) {
   return (
     <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
       <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
+      {typeof value === "string" ? <Text style={styles.summaryValue}>{value}</Text> : value}
     </View>
   );
 }

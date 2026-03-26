@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
+import { CoinAmount } from "@/components/CoinAmount";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   formatMatchDate,
@@ -25,6 +26,7 @@ import {
   subscribeToMatch,
 } from "@/lib/matches";
 import {
+  deletePrediction,
   placeOrEditPrediction,
   subscribeToMatchPredictions,
   subscribeToUserPrediction,
@@ -46,10 +48,12 @@ export default function MatchDetailScreen() {
   const [selection, setSelection] = useState<PredictionSelection>("teamA");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isLoadingMatch, setIsLoadingMatch] = useState(true);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isEditingPrediction, setIsEditingPrediction] = useState(false);
 
@@ -61,6 +65,7 @@ export default function MatchDetailScreen() {
     setSelection("teamA");
     setAmount("");
     setIsConfirmVisible(false);
+    setIsDeleteConfirmVisible(false);
     setIsEditingPrediction(false);
 
     const unsubscribe = subscribeToMatch(
@@ -135,6 +140,8 @@ export default function MatchDetailScreen() {
 
   const locked = match ? isMatchLocked(match.lockAt) : false;
   const bettingState = match ? getBettingState(match) : null;
+  const showCompletedPublicView =
+    bettingState === "completed" || bettingState === "bet_locked";
   const canEdit =
     !!match &&
     bettingState === "bet_open" &&
@@ -273,6 +280,30 @@ export default function MatchDetailScreen() {
     }
   }
 
+  function handleDeletePrediction() {
+    if (!prediction || isDeleting) {
+      return;
+    }
+
+    setIsDeleteConfirmVisible(true);
+  }
+
+  async function confirmDeletePrediction() {
+    try {
+      setIsDeleting(true);
+      await deletePrediction({
+        match: currentMatch,
+        userId: currentUserId,
+      });
+      setIsDeleteConfirmVisible(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete your bet.";
+      Alert.alert("Delete failed", message);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView
@@ -321,108 +352,168 @@ export default function MatchDetailScreen() {
               {resultLabel ? <Text style={styles.resultText}>Result: {resultLabel}</Text> : null}
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Your Prediction</Text>
-              <Text style={styles.balanceText}>
-                Balance: Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
-              </Text>
-              {predictionError ? (
-                <View style={styles.inlineError}>
-                  <Text style={styles.errorText}>{predictionError}</Text>
+            {!showCompletedPublicView ? (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Your Prediction</Text>
+                <View style={styles.balanceTextRow}>
+                  <Text style={styles.balanceText}>Balance:</Text>
+                  <CoinAmount
+                    value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+                    color="#9FB0CF"
+                    size={15}
+                    weight="700"
+                    iconSize={12}
+                  />
                 </View>
-              ) : null}
+                {predictionError ? (
+                  <View style={styles.inlineError}>
+                    <Text style={styles.errorText}>{predictionError}</Text>
+                  </View>
+                ) : null}
 
-              <View style={styles.selectionRow}>
-                <Pressable
-                  style={[
-                    styles.selectionButton,
-                    selection === "teamA" && styles.selectionButtonActive,
-                  ]}
-                  onPress={() => setSelection("teamA")}
-                  disabled={!inputsEditable}
-                >
-                  <Text
+                <View style={styles.selectionRow}>
+                  <Pressable
                     style={[
-                      styles.selectionText,
-                      selection === "teamA" && styles.selectionTextActive,
+                      styles.selectionButton,
+                      selection === "teamA" && styles.selectionButtonActive,
                     ]}
+                    onPress={() => setSelection("teamA")}
+                    disabled={!inputsEditable}
                   >
-                    {currentMatch.teamAShort}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.selectionButton,
-                    selection === "teamB" && styles.selectionButtonActive,
-                  ]}
-                  onPress={() => setSelection("teamB")}
-                  disabled={!inputsEditable}
-                >
-                  <Text
+                    <Text
+                      style={[
+                        styles.selectionText,
+                        selection === "teamA" && styles.selectionTextActive,
+                      ]}
+                    >
+                      {currentMatch.teamAShort}
+                    </Text>
+                  </Pressable>
+                  <Pressable
                     style={[
-                      styles.selectionText,
-                      selection === "teamB" && styles.selectionTextActive,
+                      styles.selectionButton,
+                      selection === "teamB" && styles.selectionButtonActive,
                     ]}
+                    onPress={() => setSelection("teamB")}
+                    disabled={!inputsEditable}
                   >
-                    {currentMatch.teamBShort}
+                    <Text
+                      style={[
+                        styles.selectionText,
+                        selection === "teamB" && styles.selectionTextActive,
+                      ]}
+                    >
+                      {currentMatch.teamBShort}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <TextInput
+                  style={[styles.input, !inputsEditable && styles.inputDisabled]}
+                  placeholder="Bet amount"
+                  placeholderTextColor="#4C5D7C"
+                  keyboardType="number-pad"
+                  value={amount}
+                  editable={inputsEditable}
+                  onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
+                />
+
+                {prediction ? (
+                  <Text style={styles.statusTextInline}>
+                    Active pick: {teamLabel(currentMatch, prediction.selectedTeam)} for{" "}
+                    {prediction.amount.toLocaleString("en-IN")} coins
                   </Text>
-                </Pressable>
+                ) : null}
+
+                {canEdit ? (
+                  <>
+                    <Pressable
+                      style={[
+                        styles.primaryButton,
+                        (isSubmitting || isDeleting) && styles.buttonDisabled,
+                      ]}
+                      onPress={handlePrimaryAction}
+                      disabled={isSubmitting || isDeleting}
+                    >
+                      <Text style={styles.primaryButtonText}>
+                        {prediction
+                          ? isEditingPrediction
+                            ? "Review Bet"
+                            : "Edit Bet"
+                          : "Review Prediction"}
+                      </Text>
+                    </Pressable>
+
+                    {prediction ? (
+                      <Pressable
+                        style={[styles.deleteButton, isDeleting && styles.buttonDisabled]}
+                        onPress={handleDeletePrediction}
+                        disabled={isDeleting || isSubmitting}
+                      >
+                        <Text style={styles.deleteButtonText}>
+                          {isDeleting ? "Deleting..." : "Delete Bet"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text style={styles.lockedText}>
+                    {bettingState === "closed"
+                      ? "Betting opens 24 hours before this match starts."
+                      : locked
+                        ? "Predictions are locked for this match."
+                        : "Admin has disabled editing for this fixture."}
+                  </Text>
+                )}
               </View>
-
-              <TextInput
-                style={[styles.input, !inputsEditable && styles.inputDisabled]}
-                placeholder="Bet amount"
-                placeholderTextColor="#4C5D7C"
-                keyboardType="number-pad"
-                value={amount}
-                editable={inputsEditable}
-                onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
-              />
-
-              {prediction ? (
-                <Text style={styles.statusTextInline}>
-                  Active pick: {teamLabel(currentMatch, prediction.selectedTeam)} for Rs.{" "}
-                  {prediction.amount.toLocaleString("en-IN")}
-                </Text>
-              ) : null}
-
-              {canEdit ? (
-                <Pressable
-                  style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
-                  onPress={handlePrimaryAction}
-                  disabled={isSubmitting}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {prediction
-                      ? isEditingPrediction
-                        ? "Review Bet"
-                        : "Edit Bet"
-                      : "Review Prediction"}
-                  </Text>
-                </Pressable>
-              ) : (
-                <Text style={styles.lockedText}>
-                  {bettingState === "closed"
-                    ? "Betting opens 24 hours before this match starts."
-                    : locked
-                      ? "Predictions are locked for this match."
-                      : "Admin has disabled editing for this fixture."}
-                </Text>
-              )}
-            </View>
+            ) : null}
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Public Predictions</Text>
               {publicPredictions.length ? (
                 publicPredictions.map((entry) => (
-                  <View key={entry.id} style={styles.publicRow}>
-                    <Text style={styles.publicName}>{entry.userDisplayName}</Text>
-                    <Text style={styles.publicChoice}>
+                  <View
+                    key={entry.id}
+                    style={[
+                      styles.publicRow,
+                      showCompletedPublicView &&
+                        entry.userId === currentUserId &&
+                        styles.publicRowCurrentUser,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.publicName,
+                        showCompletedPublicView &&
+                          entry.userId === currentUserId &&
+                          styles.publicCurrentUserText,
+                      ]}
+                    >
+                      {entry.userDisplayName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.publicChoice,
+                        showCompletedPublicView &&
+                          entry.userId === currentUserId &&
+                          styles.publicCurrentUserText,
+                      ]}
+                    >
                       {teamLabel(currentMatch, entry.selectedTeam)}
                     </Text>
-                    <Text style={styles.publicAmount}>
-                      Rs. {entry.amount.toLocaleString("en-IN")}
-                    </Text>
+                    <CoinAmount
+                      value={entry.amount.toLocaleString("en-IN")}
+                      color={
+                        showCompletedPublicView && entry.userId === currentUserId
+                          ? "#F7FAFF"
+                          : "#4AE39A"
+                      }
+                      size={14}
+                      weight="700"
+                      iconSize={11}
+                      align="right"
+                      textStyle={styles.publicAmount}
+                    />
                   </View>
                 ))
               ) : (
@@ -492,13 +583,31 @@ export default function MatchDetailScreen() {
               />
               <ConfirmRow
                 label="Bet Amount"
-                value={`Rs. ${Number(amount || 0).toLocaleString("en-IN")}`}
+                value={
+                  <CoinAmount
+                    value={Number(amount || 0).toLocaleString("en-IN")}
+                    color="#2463EB"
+                    size={17}
+                    weight="800"
+                    iconSize={13}
+                    align="right"
+                  />
+                }
                 valueAccent
               />
               <View style={styles.confirmDivider} />
               <ConfirmRow
                 label="Current Balance"
-                value={`Rs. ${(profile?.balance ?? 0).toLocaleString("en-IN")}`}
+                value={
+                  <CoinAmount
+                    value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+                    color="#F7FAFF"
+                    size={16}
+                    weight="700"
+                    iconSize={12}
+                    align="right"
+                  />
+                }
               />
             </View>
 
@@ -527,6 +636,50 @@ export default function MatchDetailScreen() {
         </View>
       </Modal>
 
+      <Modal
+        visible={isDeleteConfirmVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          if (!isDeleting) {
+            setIsDeleteConfirmVisible(false);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => {
+              if (!isDeleting) {
+                setIsDeleteConfirmVisible(false);
+              }
+            }}
+          />
+          <View style={styles.deleteConfirmCard}>
+            <Text style={styles.deleteConfirmTitle}>Delete Bet</Text>
+            <Text style={styles.deleteConfirmText}>
+              This will remove your current bet and refund the full amount to your balance.
+            </Text>
+            <Pressable
+              style={[styles.deleteConfirmButton, isDeleting && styles.buttonDisabled]}
+              onPress={confirmDeletePrediction}
+              disabled={isDeleting}
+            >
+              <Text style={styles.deleteConfirmButtonText}>
+                {isDeleting ? "Deleting..." : "Confirm Delete"}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.cancelButton, isDeleting && styles.buttonDisabled]}
+              onPress={() => setIsDeleteConfirmVisible(false)}
+              disabled={isDeleting}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {toastMessage ? (
         <View style={[styles.toastWrap, styles.toastNoPointerEvents]}>
           <View style={styles.toastCard}>
@@ -544,13 +697,21 @@ function ConfirmRow({
   valueAccent = false,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   valueAccent?: boolean;
 }) {
   return (
     <View style={styles.confirmRow}>
       <Text style={styles.confirmLabel}>{label}</Text>
-      <Text style={[styles.confirmValue, valueAccent && styles.confirmValueAccent]}>{value}</Text>
+      <View style={styles.confirmValueWrap}>
+        {typeof value === "string" ? (
+          <Text style={[styles.confirmValue, valueAccent && styles.confirmValueAccent]}>
+            {value}
+          </Text>
+        ) : (
+          value
+        )}
+      </View>
     </View>
   );
 }
@@ -702,6 +863,11 @@ const styles = StyleSheet.create({
     color: "#9FB0CF",
     fontSize: 15,
   },
+  balanceTextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   selectionRow: {
     flexDirection: "row",
     gap: 12,
@@ -758,6 +924,52 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
   },
+  deleteButton: {
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#7A2A2A",
+    backgroundColor: "#311515",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteButtonText: {
+    color: "#FFD7D7",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  deleteConfirmCard: {
+    marginHorizontal: 24,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#102042",
+    padding: 22,
+    gap: 14,
+    justifyContent: "center",
+  },
+  deleteConfirmTitle: {
+    color: "#F7FAFF",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  deleteConfirmText: {
+    color: "#DDE5F7",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  deleteConfirmButton: {
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#8F2432",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteConfirmButtonText: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
   buttonDisabled: {
     opacity: 0.7,
   },
@@ -777,6 +989,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#0E1B36",
     padding: 14,
   },
+  publicRowCurrentUser: {
+    borderColor: "#2C68E6",
+    backgroundColor: "#16356D",
+  },
   publicName: {
     flex: 1,
     color: "#F7FAFF",
@@ -787,6 +1003,9 @@ const styles = StyleSheet.create({
     color: "#8FB5FF",
     fontSize: 14,
     fontWeight: "700",
+  },
+  publicCurrentUserText: {
+    color: "#F7FAFF",
   },
   publicAmount: {
     color: "#4AE39A",
@@ -912,6 +1131,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     textAlign: "right",
+  },
+  confirmValueWrap: {
+    alignItems: "flex-end",
+    justifyContent: "center",
   },
   confirmValueAccent: {
     color: "#2463EB",

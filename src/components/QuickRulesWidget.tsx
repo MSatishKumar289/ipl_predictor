@@ -16,7 +16,7 @@ type QuickRulesWidgetProps = {
 };
 
 const quickSteps = [
-  "Start with Rs. 50,000 points to play.",
+  "Start with 50,000 coins to play.",
   "Open any upcoming match from Home.",
   "Pick your team and enter your bet amount.",
   "Review your bet, then confirm and submit.",

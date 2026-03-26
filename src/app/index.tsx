@@ -195,7 +195,7 @@ export default function HomeScreen() {
 
               <Text style={styles.helperText}>
                 {mode === "signup"
-                  ? `New users receive Rs. ${signupBonus.toLocaleString("en-IN")} instantly.`
+                  ? `New users receive ${signupBonus.toLocaleString("en-IN")} coins instantly.`
                   : "Use the mobile number and password you registered with."}
               </Text>
 

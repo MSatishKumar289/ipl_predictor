@@ -39,7 +39,8 @@ service cloud.firestore {
 
     match /predictions/{predictionId} {
       allow read, create, update: if signedIn();
-      allow delete: if false;
+      allow delete: if signedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /referrals/{referralId} {

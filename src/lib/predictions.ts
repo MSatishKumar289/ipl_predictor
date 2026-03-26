@@ -16,6 +16,19 @@ import type { PredictionRecord, PredictionSelection } from "./prediction-types";
 
 const MINIMUM_BET = 100;
 const BET_STEP = 100;
+const SEVENTY_PERCENT_RESTRICTION_THRESHOLD = 10000;
+const FIFTY_PERCENT_RESTRICTION_THRESHOLD = 20000;
+
+function getMaximumAllowedBet(availableBalance: number) {
+  if (availableBalance <= SEVENTY_PERCENT_RESTRICTION_THRESHOLD) {
+    return null;
+  }
+
+  const capRatio =
+    availableBalance > FIFTY_PERCENT_RESTRICTION_THRESHOLD ? 0.5 : 0.7;
+
+  return Math.floor((availableBalance * capRatio) / BET_STEP) * BET_STEP;
+}
 
 function predictionId(matchId: string, userId: string) {
   return `${matchId}_${userId}`;
@@ -111,11 +124,11 @@ export async function placeOrEditPrediction({
   amount: number;
 }) {
   if (amount < MINIMUM_BET) {
-    throw new Error(`Minimum bet is Rs. ${MINIMUM_BET}.`);
+    throw new Error(`Minimum bet is ${MINIMUM_BET} coins.`);
   }
 
   if (amount % BET_STEP !== 0) {
-    throw new Error(`Bets must be in multiples of Rs. ${BET_STEP}.`);
+    throw new Error(`Bets must be in multiples of ${BET_STEP} coins.`);
   }
 
   const matchRef = doc(db, "matches", match.id);
@@ -168,7 +181,15 @@ export async function placeOrEditPrediction({
     }
 
     const previousAmount = existingPrediction?.amount ?? 0;
-    const nextBalance = liveUser.balance + previousAmount - amount;
+    const availableBalance = liveUser.balance + previousAmount;
+    const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
+    const nextBalance = availableBalance - amount;
+
+    if (maximumAllowedBet !== null && amount > maximumAllowedBet) {
+      throw new Error(
+        `Maximum allowed bet is ${maximumAllowedBet.toLocaleString("en-IN")} coins for your current balance tier. Bets must also be in multiples of ${BET_STEP} coins.`
+      );
+    }
 
     if (nextBalance < 0) {
       throw new Error("Insufficient balance for this prediction.");
@@ -261,5 +282,100 @@ export async function placeOrEditPrediction({
       note: `Updated prediction for match ${match.matchNumber}`,
       createdAt: serverTimestamp(),
     });
+  });
+}
+
+export async function deletePrediction({
+  match,
+  userId,
+}: {
+  match: MatchRecord;
+  userId: string;
+}) {
+  const matchRef = doc(db, "matches", match.id);
+  const userRef = doc(db, "users", userId);
+  const predictionRef = doc(db, "predictions", predictionId(match.id, userId));
+
+  await runTransaction(db, async (transaction) => {
+    const [matchSnapshot, userSnapshot, predictionSnapshot] = await Promise.all([
+      transaction.get(matchRef),
+      transaction.get(userRef),
+      transaction.get(predictionRef),
+    ]);
+
+    if (!matchSnapshot.exists()) {
+      throw new Error("Match not found.");
+    }
+
+    if (!userSnapshot.exists()) {
+      throw new Error("User profile not found.");
+    }
+
+    if (!predictionSnapshot.exists()) {
+      throw new Error("Prediction not found.");
+    }
+
+    const liveMatch = matchSnapshot.data() as MatchRecord;
+    const liveUser = userSnapshot.data() as UserProfile;
+    const livePrediction = predictionSnapshot.data() as Omit<PredictionRecord, "id">;
+    const referralRef = liveUser.referralId ? doc(db, "referrals", liveUser.referralId) : null;
+    const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
+    const referralData = referralSnapshot?.exists()
+      ? (referralSnapshot.data() as {
+          status?: string;
+          firstPredictionId?: string | null;
+        })
+      : null;
+
+    if (!isBettingOpen(liveMatch)) {
+      if (Date.now() >= new Date(liveMatch.lockAt).getTime()) {
+        throw new Error("Predictions are locked for this match.");
+      }
+
+      throw new Error("Betting opens 24 hours before the match starts.");
+    }
+
+    if (Date.now() >= new Date(liveMatch.lockAt).getTime()) {
+      throw new Error("Predictions are locked for this match.");
+    }
+
+    if (!liveMatch.isEditableBeforeLock) {
+      throw new Error("Prediction editing is disabled for this match.");
+    }
+
+    const nextBalance = liveUser.balance + livePrediction.amount;
+
+    transaction.delete(predictionRef);
+
+    transaction.update(userRef, {
+      balance: nextBalance,
+      totalPredictions: Math.max(0, liveUser.totalPredictions - 1),
+      updatedAt: serverTimestamp(),
+    });
+
+    transaction.set(doc(collection(db, "transactions")), {
+      userId,
+      type: "bet_deleted_refund",
+      amount: livePrediction.amount,
+      balanceBefore: liveUser.balance,
+      balanceAfter: nextBalance,
+      referenceType: "match",
+      referenceId: match.id,
+      note: `Deleted prediction for match ${match.matchNumber}`,
+      createdAt: serverTimestamp(),
+    });
+
+    if (
+      referralRef &&
+      referralData?.status === "first_bet_pending_settlement" &&
+      referralData.firstPredictionId === predictionRef.id
+    ) {
+      transaction.update(referralRef, {
+        status: "signed_up",
+        firstPredictionId: null,
+        firstMatchId: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
   });
 }

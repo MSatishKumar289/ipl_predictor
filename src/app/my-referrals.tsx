@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { BackButton } from "@/components/BackButton";
+import { CoinAmount } from "@/components/CoinAmount";
 import {
   REFERRAL_REWARD_AMOUNT,
   getReferralStatusLabel,
@@ -29,11 +30,21 @@ function getTimestampValue(value: unknown) {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  if (typeof value === "object" && value && "toMillis" in value && typeof value.toMillis === "function") {
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
     return value.toMillis();
   }
 
-  if (typeof value === "object" && value && "seconds" in value && typeof value.seconds === "number") {
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
     return value.seconds * 1000;
   }
 
@@ -54,14 +65,6 @@ function formatDateTime(value: unknown) {
     minute: "2-digit",
     hour12: true,
   }).format(new Date(timestamp));
-}
-
-function formatReward(referral: ReferralRecord) {
-  if (referral.status !== "rewarded") {
-    return "Pending";
-  }
-
-  return `₹ ${referral.rewardAmount.toLocaleString("en-IN")}`;
 }
 
 function StatusChip({ status }: { status: ReferralRecord["status"] }) {
@@ -102,16 +105,21 @@ function ReferralRow({
       <View style={[styles.statusCol, styles.statusCell]}>
         <StatusChip status={referral.status} />
       </View>
-      <Text
-        style={[
-          styles.cellText,
-          styles.rewardCol,
-          referral.status === "rewarded" ? styles.rewardText : styles.pendingText,
-        ]}
-        numberOfLines={1}
-      >
-        {formatReward(referral)}
-      </Text>
+      {referral.status === "rewarded" ? (
+        <CoinAmount
+          value={referral.rewardAmount.toLocaleString("en-IN")}
+          color="#5FE4A9"
+          size={14}
+          weight="700"
+          iconSize={11}
+          style={styles.rewardCol}
+          textStyle={styles.cellText}
+        />
+      ) : (
+        <Text style={[styles.cellText, styles.rewardCol, styles.pendingText]} numberOfLines={1}>
+          Pending
+        </Text>
+      )}
       <Text style={[styles.cellText, styles.dateCol]} numberOfLines={2}>
         {formatDateTime(referral.rewardedAt ?? referral.createdAt)}
       </Text>
@@ -190,7 +198,14 @@ export default function MyReferralsScreen() {
             </View>
             <SummaryCard
               label="Earned"
-              value={`₹ ${totals.earned.toLocaleString("en-IN")}`}
+              value={
+                <CoinAmount
+                  value={totals.earned.toLocaleString("en-IN")}
+                  size={26}
+                  weight="800"
+                  iconSize={18}
+                />
+              }
               fullWidth
             />
           </View>
@@ -220,11 +235,7 @@ export default function MyReferralsScreen() {
                   </View>
                 ) : referrals.length ? (
                   referrals.map((referral) => (
-                    <ReferralRow
-                      key={referral.id}
-                      referral={referral}
-                      isCompact={isCompact}
-                    />
+                    <ReferralRow key={referral.id} referral={referral} isCompact={isCompact} />
                   ))
                 ) : (
                   <View style={styles.emptyRow}>
@@ -252,14 +263,20 @@ function SummaryCard({
   fullWidth = false,
 }: {
   label: string;
-  value: string;
+  value: string | ReactNode;
   accent?: boolean;
   fullWidth?: boolean;
 }) {
   return (
-    <View style={[styles.summaryCard, fullWidth && styles.summaryCardFullWidth, accent && styles.summaryCardAccent]}>
+    <View
+      style={[
+        styles.summaryCard,
+        fullWidth && styles.summaryCardFullWidth,
+        accent && styles.summaryCardAccent,
+      ]}
+    >
       <Text style={[styles.summaryLabel, accent && styles.summaryLabelAccent]}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
+      {typeof value === "string" ? <Text style={styles.summaryValue}>{value}</Text> : value}
     </View>
   );
 }
@@ -460,9 +477,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-  },
-  rewardText: {
-    color: "#5FE4A9",
   },
   pendingText: {
     color: "#AFC0DE",
