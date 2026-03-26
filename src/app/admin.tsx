@@ -20,6 +20,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
 import {
+  queueBroadcastNotification,
+  type BroadcastNotificationType,
+} from "@/lib/admin-notifications";
+import {
   createMatch,
   formatMatchDate,
   settleMatchOutcome,
@@ -60,6 +64,10 @@ export default function AdminScreen() {
   const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastError, setBroadcastError] = useState<string | null>(null);
+  const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
+  const [isBroadcastSubmitting, setIsBroadcastSubmitting] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -225,6 +233,37 @@ export default function AdminScreen() {
       Alert.alert("Settlement failed", message);
     } finally {
       setIsSettling(false);
+    }
+  }
+
+  async function handleSendBroadcast(type: BroadcastNotificationType) {
+    if (isBroadcastSubmitting) {
+      return;
+    }
+
+    setBroadcastError(null);
+    setBroadcastSuccess(null);
+
+    try {
+      setIsBroadcastSubmitting(true);
+      await queueBroadcastNotification({
+        type,
+        message: broadcastMessage,
+        createdBy: adminUserId,
+      });
+      setBroadcastMessage("");
+      setBroadcastSuccess(
+        type === "important_update"
+          ? "Important update queued for all users."
+          : "Maintenance notice queued for all users."
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to queue broadcast notification.";
+      setBroadcastError(message);
+      Alert.alert("Notification failed", message);
+    } finally {
+      setIsBroadcastSubmitting(false);
     }
   }
 
@@ -440,6 +479,57 @@ export default function AdminScreen() {
                 </Text>
               </Pressable>
             </View>
+
+          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+            <Text style={styles.cardTitle}>Broadcast Notification</Text>
+            <Text style={styles.selectionSummaryText}>
+              Send an important update or maintenance notice to all users.
+            </Text>
+            <TextInput
+              style={[styles.input, styles.broadcastInput]}
+              placeholder="Enter message"
+              placeholderTextColor="#4C5D7C"
+              value={broadcastMessage}
+              onChangeText={setBroadcastMessage}
+              multiline
+              textAlignVertical="top"
+            />
+
+            {broadcastError ? (
+              <View style={styles.formMessageError}>
+                <Text style={styles.formMessageErrorText}>{broadcastError}</Text>
+              </View>
+            ) : null}
+
+            {broadcastSuccess ? (
+              <View style={styles.formMessageSuccess}>
+                <Text style={styles.formMessageSuccessText}>{broadcastSuccess}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.broadcastActions}>
+              <Pressable
+                style={[styles.actionButton, styles.broadcastButton, isBroadcastSubmitting && styles.buttonDisabled]}
+                onPress={() => handleSendBroadcast("important_update")}
+                disabled={isBroadcastSubmitting}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isBroadcastSubmitting ? "Sending..." : "Send Important Update"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.actionButtonAlt,
+                  styles.broadcastButton,
+                  isBroadcastSubmitting && styles.buttonDisabled,
+                ]}
+                onPress={() => handleSendBroadcast("maintenance_notice")}
+                disabled={isBroadcastSubmitting}
+              >
+                <Text style={styles.actionButtonText}>Send Maintenance Notice</Text>
+              </Pressable>
+            </View>
+          </View>
 
           <View style={[styles.card, isDesktop && styles.cardDesktop]}>
             <Text style={styles.cardTitle}>Manage Matches</Text>
@@ -834,6 +924,10 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 16,
   },
+  broadcastInput: {
+    minHeight: 112,
+    paddingVertical: 14,
+  },
   selectorSection: {
     gap: 10,
   },
@@ -1005,6 +1099,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
+  broadcastActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
   actionButton: {
     minWidth: 88,
     height: 44,
@@ -1022,6 +1121,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#374A6A",
     paddingHorizontal: 14,
+  },
+  broadcastButton: {
+    flex: 1,
   },
   actionButtonText: {
     color: "#F7FAFF",

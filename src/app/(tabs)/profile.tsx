@@ -1,18 +1,43 @@
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { updateUserNotificationPreference } from "@/lib/push-notifications";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
-  const { profile, error } = useAuth();
+  const { user, profile, error } = useAuth();
   const { width } = useWindowDimensions();
   const adminRoute = "/admin" as Href;
   const logoutRoute = "/logout" as Href;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUpdatingNotifications, setIsUpdatingNotifications] = useState(false);
   const isDesktop = width >= 1024;
+  const notificationsEnabled = profile?.notificationsEnabled !== false;
+
+  async function handleToggleNotifications(nextValue: boolean) {
+    if (!user || isUpdatingNotifications) {
+      return;
+    }
+
+    try {
+      setIsUpdatingNotifications(true);
+      await updateUserNotificationPreference(user.uid, nextValue);
+    } finally {
+      setIsUpdatingNotifications(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -84,6 +109,28 @@ export default function ProfileTab() {
               label="Status"
               value={profile?.role === "admin" ? "Admin access enabled" : "Standard player"}
             />
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Preferences</Text>
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceTextWrap}>
+                <Text style={styles.preferenceLabel}>Notifications</Text>
+                <Text style={styles.preferenceHint}>
+                  Turn match, referral, and wallet alerts on or off.
+                </Text>
+              </View>
+              {isUpdatingNotifications ? (
+                <ActivityIndicator size="small" color="#3F7DFF" />
+              ) : (
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={handleToggleNotifications}
+                  trackColor={{ false: "#334C76", true: "#1E5AE0" }}
+                  thumbColor="#F7FAFF"
+                />
+              )}
+            </View>
           </View>
 
           {profile?.role === "admin" ? (
@@ -368,6 +415,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     textAlign: "right",
+  },
+  preferenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    borderRadius: 16,
+    backgroundColor: "#0E1B36",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  preferenceTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  preferenceLabel: {
+    color: "#F7FAFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  preferenceHint: {
+    color: "#8EA0C1",
+    fontSize: 13,
+    lineHeight: 18,
   },
   adminButton: {
     height: 56,

@@ -9,6 +9,9 @@ export type UserProfile = {
   referredByUserId?: string | null;
   referredByDisplayName?: string | null;
   hasSeenReferralMessage?: boolean;
+  notificationsEnabled?: boolean;
+  lowBalanceAlertActive?: boolean;
+  lowBalanceNotifiedAt?: string | null;
   role: UserRole;
   balance: number;
   points: number;

@@ -214,14 +214,32 @@ export async function ensureUserProfile(
       (!looksLikePhoneLabel(user.displayName) ? user.displayName : null) ??
       profile.displayName;
 
+    const profileUpdates: Record<string, unknown> = {};
+
     if (normalizedPhoneNumber && resolvedAuthEmail) {
-      await updateDoc(userRef, {
-        displayName: looksLikePhoneLabel(profile.displayName) ? resolvedDisplayName : profile.displayName,
-        phoneNumber: normalizedPhoneNumber,
-        email: resolvedAuthEmail,
-        loginMethod: "phone",
-        updatedAt: serverTimestamp(),
-      });
+      profileUpdates.displayName = looksLikePhoneLabel(profile.displayName)
+        ? resolvedDisplayName
+        : profile.displayName;
+      profileUpdates.phoneNumber = normalizedPhoneNumber;
+      profileUpdates.email = resolvedAuthEmail;
+      profileUpdates.loginMethod = "phone";
+    }
+
+    if (typeof profile.notificationsEnabled !== "boolean") {
+      profileUpdates.notificationsEnabled = true;
+    }
+
+    if (typeof profile.lowBalanceAlertActive !== "boolean") {
+      profileUpdates.lowBalanceAlertActive = false;
+    }
+
+    if (!("lowBalanceNotifiedAt" in profile)) {
+      profileUpdates.lowBalanceNotifiedAt = null;
+    }
+
+    if (Object.keys(profileUpdates).length) {
+      profileUpdates.updatedAt = serverTimestamp();
+      await updateDoc(userRef, profileUpdates);
     }
 
     const updatedSnapshot = await getDoc(userRef);
@@ -289,20 +307,23 @@ async function createUserProfile(
     const now = serverTimestamp();
     const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
 
-    transaction.set(userRef, {
-      displayName: normalizedDisplayName,
-      email: resolvedAuthEmail,
-      phoneNumber: normalizedPhoneNumber,
-      loginMethod: normalizedPhoneNumber ? "phone" : "email",
+      transaction.set(userRef, {
+        displayName: normalizedDisplayName,
+        email: resolvedAuthEmail,
+        phoneNumber: normalizedPhoneNumber,
+        loginMethod: normalizedPhoneNumber ? "phone" : "email",
       referralId: referralData && referralRef ? referralRef.id : null,
-      referredByUserId: referralData?.referrerUserId ?? null,
-      referredByDisplayName: referralData?.referrerDisplayName ?? null,
-      hasSeenReferralMessage: referralData ? false : true,
-      role: "user",
-      balance: openingBalance,
-      points: 0,
-      wins: 0,
-      losses: 0,
+        referredByUserId: referralData?.referrerUserId ?? null,
+        referredByDisplayName: referralData?.referrerDisplayName ?? null,
+        hasSeenReferralMessage: referralData ? false : true,
+        notificationsEnabled: true,
+        lowBalanceAlertActive: false,
+        lowBalanceNotifiedAt: null,
+        role: "user",
+        balance: openingBalance,
+        points: 0,
+        wins: 0,
+        losses: 0,
       totalPredictions: 0,
       createdAt: now,
       updatedAt: now,
