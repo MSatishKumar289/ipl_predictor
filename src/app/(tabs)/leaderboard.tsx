@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { CoinAmount } from "@/components/CoinAmount";
 import { subscribeToLeaderboardUsers } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
@@ -123,9 +124,16 @@ export default function LeaderboardTab() {
                       {entry.wins}/{entry.losses}
                     </Text>
                     <Text style={[styles.tableCell, styles.picksCol]}>{entry.totalPredictions}</Text>
-                    <Text style={[styles.tableCell, styles.balanceCol, styles.balanceCell]}>
-                      Rs. {entry.balance.toLocaleString("en-IN")}
-                    </Text>
+                    <CoinAmount
+                      value={entry.balance.toLocaleString("en-IN")}
+                      color="#73E2A8"
+                      size={12}
+                      weight="700"
+                      iconSize={10}
+                      align="right"
+                      style={styles.balanceCol}
+                      textStyle={styles.balanceCell}
+                    />
                   </View>
                 ) : (
                   <View key={entry.uid} style={isCurrentUser && styles.mobileCurrentUserWrap}>
@@ -142,9 +150,16 @@ export default function LeaderboardTab() {
                         </Text>
                       </View>
                       <Text style={[styles.tableCell, styles.pointsCol, styles.pointsCell]}>{entry.points}</Text>
-                      <Text style={[styles.tableCell, styles.balanceCol, styles.balanceCell]}>
-                        Rs. {entry.balance.toLocaleString("en-IN")}
-                      </Text>
+                      <CoinAmount
+                        value={entry.balance.toLocaleString("en-IN")}
+                        color="#73E2A8"
+                        size={12}
+                        weight="700"
+                        iconSize={10}
+                        align="right"
+                        style={styles.balanceCol}
+                        textStyle={styles.balanceCell}
+                      />
                     </Pressable>
                     {isExpanded ? (
                       <View style={[styles.expandedRow, isCurrentUser && styles.expandedRowCurrentUser]}>

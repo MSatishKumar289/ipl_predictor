@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { CoinAmount } from "@/components/CoinAmount";
 import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -111,9 +112,13 @@ export default function HomeTab() {
 
         <View style={styles.balanceCard}>
           <Text style={styles.cardLabel}>Current Balance</Text>
-          <Text style={styles.balanceValue}>
-            Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
-          </Text>
+          <CoinAmount
+            value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+            size={30}
+            weight="800"
+            iconSize={20}
+            style={styles.balanceValueRow}
+          />
           <Text style={styles.balanceHint}>Ready for tonight&apos;s fixtures</Text>
         </View>
 
@@ -280,7 +285,7 @@ function FeaturedMatchCard({
           <StatusBadge label={badge.label} tone={badge.tone} compact />
           {prediction ? (
             <Text style={styles.featuredBetHint}>
-              Your Bet: Rs. {prediction.amount.toLocaleString("en-IN")} |{" "}
+              Your Bet: {prediction.amount.toLocaleString("en-IN")} coins |{" "}
               {prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort}
             </Text>
           ) : null}
@@ -324,7 +329,7 @@ function CompactMatchRow({
             title="Prediction Confirmed"
             detail={`Picked ${
               prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort
-            } - Rs. ${prediction.amount.toLocaleString("en-IN")}`}
+            } - ${prediction.amount.toLocaleString("en-IN")} coins`}
           />
         ) : match.winner ? (
           <Text style={styles.rowPrediction}>{getWinnerSummary(match)}</Text>
@@ -614,6 +619,9 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 30,
     fontWeight: "800",
+  },
+  balanceValueRow: {
+    minHeight: 38,
   },
   balanceHint: {
     color: "#7FA6FF",

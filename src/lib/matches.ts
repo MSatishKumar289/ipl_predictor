@@ -19,7 +19,7 @@ import type { CreateMatchInput, MatchOutcome, MatchRecord, MatchStatus } from ".
 import type { PredictionRecord } from "./prediction-types";
 import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
-const MATCH_LOCK_MINUTES = 5;
+const MATCH_LOCK_MINUTES = 30;
 const BETTING_OPEN_HOURS = 24;
 const WIN_POINTS = 3;
 

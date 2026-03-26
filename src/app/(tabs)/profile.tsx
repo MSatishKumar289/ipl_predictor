@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { CoinAmount } from "@/components/CoinAmount";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
@@ -58,9 +59,13 @@ export default function ProfileTab() {
 
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Current Balance</Text>
-            <Text style={styles.balanceValue}>
-              Rs. {(profile?.balance ?? 0).toLocaleString("en-IN")}
-            </Text>
+            <CoinAmount
+              value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+              size={32}
+              weight="900"
+              iconSize={22}
+              style={styles.balanceValueRow}
+            />
             <Text style={styles.balanceHint}>
               This updates when bets are placed, edited, or settled.
             </Text>
@@ -298,6 +303,9 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 32,
     fontWeight: "900",
+  },
+  balanceValueRow: {
+    minHeight: 40,
   },
   balanceHint: {
     color: "#8EA0C1",
