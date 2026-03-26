@@ -29,6 +29,11 @@ service cloud.firestore {
         (request.auth.uid == userId || isAdmin()) &&
         (isKeepingSameDisplayName() || hasValidDisplayName());
       allow delete: if false;
+
+      match /devices/{deviceId} {
+        allow get, list, create, update, delete: if signedIn() &&
+          (request.auth.uid == userId || isAdmin());
+      }
     }
 
     match /matches/{matchId} {
@@ -55,6 +60,19 @@ service cloud.firestore {
           resource.data.referrerUserId == request.auth.uid ||
           request.resource.data.referredUserId == request.auth.uid
         );
+      allow delete: if false;
+    }
+
+    match /broadcastNotifications/{broadcastId} {
+      allow read: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.type in ["important_update", "maintenance_notice"] &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() > 0 &&
+        request.resource.data.audience == "all_users" &&
+        request.resource.data.status == "queued";
+      allow update: if isAdmin();
       allow delete: if false;
     }
 

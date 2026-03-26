@@ -1,11 +1,17 @@
 import { Alert } from "react-native";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 
 import { ensureUserProfile, subscribeToAuth, subscribeToUserProfile } from "@/lib/auth";
 import type { UserProfile } from "@/lib/auth-types";
 import { firebaseInitializationError } from "@/lib/firebase";
 import { markReferralMessageSeen } from "@/lib/referrals";
+import {
+  addPushNotificationResponseListener,
+  handleInitialPushNotificationResponse,
+  registerCurrentDeviceForPushNotifications,
+  unregisterCurrentDevicePushToken,
+} from "@/lib/push-notifications";
 
 type AuthContextValue = {
   user: User | null;
@@ -21,6 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const currentPushTokenRef = useRef<string | null>(null);
+  const previousUserIdRef = useRef<string | null>(null);
+  const handledNotificationIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (firebaseInitializationError) {
@@ -110,6 +119,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void markReferralMessageSeen(user.uid);
   }, [profile, user]);
+
+  useEffect(() => {
+    const hasHandledResponse = (identifier: string) =>
+      handledNotificationIdsRef.current.has(identifier);
+    const markResponseHandled = (identifier: string) => {
+      handledNotificationIdsRef.current.add(identifier);
+    };
+
+    void handleInitialPushNotificationResponse(hasHandledResponse, markResponseHandled);
+
+    return addPushNotificationResponseListener(hasHandledResponse, markResponseHandled);
+  }, []);
+
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const currentUserId = user?.uid ?? null;
+
+    if (
+      previousUserId &&
+      previousUserId !== currentUserId &&
+      currentPushTokenRef.current
+    ) {
+      void unregisterCurrentDevicePushToken(previousUserId, currentPushTokenRef.current);
+      currentPushTokenRef.current = null;
+    }
+
+    previousUserIdRef.current = currentUserId;
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    let isActive = true;
+
+    void (async () => {
+      try {
+        const token = await registerCurrentDeviceForPushNotifications(user.uid);
+
+        if (isActive) {
+          currentPushTokenRef.current = token;
+        }
+      } catch (pushError) {
+        console.error(
+          "Push notification registration failed:",
+          pushError instanceof Error ? pushError.message : pushError
+        );
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user?.uid]);
 
   const value = useMemo(
     () => ({
