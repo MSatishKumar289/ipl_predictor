@@ -77,6 +77,7 @@ export default function AdminScreen() {
   const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
   const [pendingUserActionId, setPendingUserActionId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfileRecord | null>(null);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
 
@@ -130,6 +131,25 @@ export default function AdminScreen() {
       )
       .reverse();
   }, [matches]);
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = userSearchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return users;
+    }
+
+    const digitQuery = normalizedQuery.replace(/[^0-9]/g, "");
+
+    return users.filter((entry) => {
+      const nameValue = entry.displayName.toLowerCase();
+      const phoneValue = (entry.phoneNumber ?? "").replace(/[^0-9]/g, "");
+
+      return (
+        nameValue.includes(normalizedQuery) ||
+        (!!digitQuery && phoneValue.includes(digitQuery))
+      );
+    });
+  }, [userSearchQuery, users]);
   const visibleMatches = activeMatchView === "live" ? liveMatches : resultMatches;
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
@@ -783,6 +803,13 @@ export default function AdminScreen() {
               ) : (
                 <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Users List</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Search by name or mobile number"
+                    placeholderTextColor="#4C5D7C"
+                    value={userSearchQuery}
+                    onChangeText={setUserSearchQuery}
+                  />
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -810,12 +837,14 @@ export default function AdminScreen() {
                         <View style={styles.loadingState}>
                           <ActivityIndicator size="small" color="#1E5AE0" />
                         </View>
-                      ) : users.length ? (
-                        users.map((entry) => (
+                      ) : filteredUsers.length ? (
+                        filteredUsers.map((entry) => (
                           <UserRow key={entry.uid} user={entry} onRowPress={() => setSelectedUser(entry)} />
                         ))
                       ) : (
-                        <Text style={styles.emptyText}>No users found yet.</Text>
+                        <Text style={styles.emptyText}>
+                          {userSearchQuery.trim() ? "No users matched your search." : "No users found yet."}
+                        </Text>
                       )}
                     </View>
                   </ScrollView>

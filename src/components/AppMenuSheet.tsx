@@ -61,15 +61,25 @@ export function AppMenuSheet({
   const [friendName, setFriendName] = useState("");
   const [friendMobile, setFriendMobile] = useState("");
   const [isSubmittingReferral, setIsSubmittingReferral] = useState(false);
+  const [referralInlineMessage, setReferralInlineMessage] = useState<{
+    tone: "error" | "success";
+    text: string;
+  } | null>(null);
 
   async function handleSubmitReferral() {
+    setReferralInlineMessage(null);
+
     if (!user || !profile) {
-      Alert.alert("Profile missing", "Please wait for your profile to load and try again.");
+      const message = "Please wait for your profile to load and try again.";
+      setReferralInlineMessage({ tone: "error", text: message });
+      Alert.alert("Profile missing", message);
       return;
     }
 
     if (!friendMobile.trim()) {
-      Alert.alert("Missing mobile number", "Enter a valid mobile number.");
+      const message = "Enter a valid mobile number.";
+      setReferralInlineMessage({ tone: "error", text: message });
+      Alert.alert("Missing mobile number", message);
       return;
     }
 
@@ -86,11 +96,16 @@ export function AppMenuSheet({
 
       setFriendName("");
       setFriendMobile("");
+      setReferralInlineMessage({
+        tone: "success",
+        text: "Your referral has been saved successfully.",
+      });
       setIsReferModalOpen(false);
       Alert.alert("Referral sent", "Your referral has been saved successfully.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to send referral right now.";
+      setReferralInlineMessage({ tone: "error", text: message });
       Alert.alert("Referral failed", message);
     } finally {
       setIsSubmittingReferral(false);
@@ -132,6 +147,7 @@ export function AppMenuSheet({
                       onClose();
 
                       if (item.label === "Refer a Friend") {
+                        setReferralInlineMessage(null);
                         setIsReferModalOpen(true);
                         return;
                       }
@@ -196,6 +212,28 @@ export function AppMenuSheet({
             <Text style={styles.referHelperText}>
               Enter only 10 digit mobile no without space or +91
             </Text>
+
+            {referralInlineMessage ? (
+              <View
+                style={[
+                  styles.referMessageCard,
+                  referralInlineMessage.tone === "error"
+                    ? styles.referMessageErrorCard
+                    : styles.referMessageSuccessCard,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.referMessageText,
+                    referralInlineMessage.tone === "error"
+                      ? styles.referMessageErrorText
+                      : styles.referMessageSuccessText,
+                  ]}
+                >
+                  {referralInlineMessage.text}
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.referActionRow}>
               <Pressable
@@ -363,6 +401,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: -4,
+  },
+  referMessageCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: -2,
+  },
+  referMessageErrorCard: {
+    borderColor: "#7A2A2A",
+    backgroundColor: "#311515",
+  },
+  referMessageSuccessCard: {
+    borderColor: "#2B7B57",
+    backgroundColor: "#123325",
+  },
+  referMessageText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  referMessageErrorText: {
+    color: "#F0B3B3",
+  },
+  referMessageSuccessText: {
+    color: "#BEEFD5",
   },
   referActionRow: {
     flexDirection: "row",
