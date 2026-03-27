@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Text, View } from "react-native";
 import { Redirect, Stack, router, usePathname } from "expo-router";
 
 import { RouteFallbackScreen } from "@/components/RouteFallbackScreen";
@@ -11,6 +13,21 @@ const authenticatedRoute = "/(tabs)/home";
 const publicRoutes = new Set([authRoute, "/logout", "/+not-found"]);
 
 export default function RootLayout() {
+  const [isClientReady, setIsClientReady] = useState(false);
+
+  useEffect(() => {
+    setIsClientReady(true);
+  }, []);
+
+  if (!isClientReady) {
+    return (
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#1E5AE0" />
+        <Text style={styles.loadingText}>Loading FPL...</Text>
+      </View>
+    );
+  }
+
   return (
     <AuthProvider>
       <AuthGate />
@@ -76,3 +93,19 @@ function AuthGate() {
     </>
   );
 }
+
+const styles = {
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: "#0A1325",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    color: "#DDE5F7",
+    fontSize: 16,
+    fontWeight: "600" as const,
+  },
+};
