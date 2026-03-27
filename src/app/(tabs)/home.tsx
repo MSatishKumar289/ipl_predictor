@@ -20,6 +20,7 @@ import type { PredictionRecord } from "@/lib/prediction-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type MatchFilter = "upcoming" | "live" | "completed";
+const appTimeZone = "Asia/Kolkata";
 
 const filters: { key: MatchFilter; label: string }[] = [
   { key: "upcoming", label: "Upcoming" },
@@ -419,6 +420,7 @@ function getBetLockTimeLabel(match: MatchRecord) {
   const timeLabel = new Intl.DateTimeFormat("en-IN", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: appTimeZone,
   }).format(new Date(match.lockAt));
 
   return `Betting Locks : ${timeLabel}`;
@@ -430,18 +432,25 @@ function getCollapsedScheduleLabel(match: MatchRecord) {
     month: "short",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: appTimeZone,
   }).format(new Date(match.startAt));
 }
 
 function getRelativeDayLabel(match: MatchRecord) {
   const target = new Date(match.startAt);
   const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const startOfTarget = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate()
-  ).getTime();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: appTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const targetParts = formatter.formatToParts(target);
+  const todayParts = formatter.formatToParts(today);
+  const targetDate = `${targetParts.find((part) => part.type === "year")?.value}-${targetParts.find((part) => part.type === "month")?.value}-${targetParts.find((part) => part.type === "day")?.value}`;
+  const todayDate = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
+  const startOfToday = new Date(`${todayDate}T00:00:00Z`).getTime();
+  const startOfTarget = new Date(`${targetDate}T00:00:00Z`).getTime();
   const dayOffset = Math.round((startOfTarget - startOfToday) / (24 * 60 * 60 * 1000));
 
   if (dayOffset === 0) {
@@ -459,6 +468,7 @@ function getRelativeDayLabel(match: MatchRecord) {
   return new Intl.DateTimeFormat("en-IN", {
     day: "2-digit",
     month: "short",
+    timeZone: appTimeZone,
   }).format(target);
 }
 
