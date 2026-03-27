@@ -28,7 +28,7 @@ service cloud.firestore {
       allow update: if signedIn() &&
         (request.auth.uid == userId || isAdmin()) &&
         (isKeepingSameDisplayName() || hasValidDisplayName());
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /matches/{matchId} {
@@ -56,13 +56,21 @@ service cloud.firestore {
           resource.data.referrerUserId == request.auth.uid ||
           request.resource.data.referredUserId == request.auth.uid
         );
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /transactions/{transactionId} {
       allow read: if signedIn();
       allow create: if signedIn() || isAdmin();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /app_settings/{settingId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if isAdmin();
+      allow delete: if false;
     }
   }
 }
