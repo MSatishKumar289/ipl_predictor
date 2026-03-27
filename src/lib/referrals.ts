@@ -7,6 +7,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -31,6 +32,28 @@ function validateReferralPhoneNumber(phoneNumber: string) {
 
 function referralIdFromPhoneNumber(phoneNumber: string) {
   return normalizeReferralPhoneNumber(phoneNumber);
+}
+
+export async function validateReferralForSignup(phoneNumber: string) {
+  const normalizedPhoneNumber = validateReferralPhoneNumber(phoneNumber);
+  const referralRef = doc(db, "referrals", referralIdFromPhoneNumber(normalizedPhoneNumber));
+  const referralSnapshot = await getDoc(referralRef);
+
+  if (!referralSnapshot.exists()) {
+    return null;
+  }
+
+  const referral = referralSnapshot.data() as ReferralRecord;
+
+  if (referral.status !== "pending" || referral.referredUserId) {
+    return null;
+  }
+
+  return {
+    referralId: referralRef.id,
+    referredName: referral.referredName?.trim() || null,
+    referrerDisplayName: referral.referrerDisplayName,
+  };
 }
 
 function getTimestampValue(value: unknown) {
@@ -149,18 +172,9 @@ export function subscribeToUserReferrals(
 }
 
 export async function markReferralMessageSeen(uid: string) {
-  const userRef = doc(db, "users", uid);
-
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(userRef);
-    if (!snapshot.exists()) {
-      return;
-    }
-
-    transaction.update(userRef, {
-      hasSeenReferralMessage: true,
-      updatedAt: serverTimestamp(),
-    });
+  await updateDoc(doc(db, "users", uid), {
+    hasSeenReferralMessage: true,
+    updatedAt: serverTimestamp(),
   });
 }
 

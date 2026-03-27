@@ -19,15 +19,13 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 
-import { getFirebaseFunctions, getFirebaseServices } from "./firebase";
-import { normalizeAccessControlSettings } from "./access-control";
+import { getFirebaseServices } from "./firebase";
 import type { UserProfile, UserProfileRecord } from "./auth-types";
 import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
 const SIGNUP_BONUS = 50000;
-const PHONE_AUTH_DOMAIN = "phone.friendspremierleague.app";
+const PHONE_AUTH_DOMAIN = "phone.fpl.app";
 
 function normalizeDisplayName(displayName: string) {
   return displayName.trim();
@@ -220,20 +218,6 @@ export function subscribeToAllUsers(
   );
 }
 
-export async function approveUserAccess(uid: string) {
-  const { db } = getFirebaseServices();
-  await updateDoc(doc(db, "users", uid), {
-    accessStatus: "active",
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function rejectPendingUser(uid: string) {
-  const functions = getFirebaseFunctions();
-  const callable = httpsCallable(functions, "rejectPendingUser");
-  await callable({ targetUserId: uid });
-}
-
 export async function deleteUserRecords(uid: string) {
   const { db } = getFirebaseServices();
   const userRef = doc(db, "users", uid);
@@ -407,7 +391,6 @@ async function createUserProfile(
   const userRef = doc(db, "users", user.uid);
   const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
   const referralRef = normalizedPhoneNumber ? doc(db, "referrals", normalizedPhoneNumber) : null;
-  const accessControlRef = doc(db, "app_settings", "access_control");
 
   await runTransaction(db, async (transaction) => {
     const existingUser = await transaction.get(userRef);
@@ -417,12 +400,6 @@ async function createUserProfile(
     }
 
     const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
-    const accessControlSnapshot = await transaction.get(accessControlRef);
-    const accessControlSettings = normalizeAccessControlSettings(
-      accessControlSnapshot.exists()
-        ? (accessControlSnapshot.data() as { requireReferralForInstantAccess?: boolean })
-        : null
-    );
     const referralData =
       referralSnapshot?.exists() &&
       (referralSnapshot.data() as { status?: string; referrerUserId?: string; referrerDisplayName?: string })
@@ -433,10 +410,10 @@ async function createUserProfile(
             referrerDisplayName: string;
           })
         : null;
-    const accessStatus =
-      referralData || !accessControlSettings.requireReferralForInstantAccess
-        ? "active"
-        : "pending_approval";
+
+    if (!referralData) {
+      throw new Error("Referral required for sign up. Contact admin to get access.");
+    }
 
     const now = serverTimestamp();
     const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
@@ -450,7 +427,6 @@ async function createUserProfile(
       referredByUserId: referralData?.referrerUserId ?? null,
       referredByDisplayName: referralData?.referrerDisplayName ?? null,
       hasSeenReferralMessage: referralData ? false : true,
-      accessStatus,
       role: "user",
       balance: openingBalance,
       points: 0,
@@ -509,18 +485,8 @@ async function createUserProfileFromMissingSnapshot(
   const userRef = doc(db, "users", user.uid);
   const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
   const referralRef = normalizedPhoneNumber ? doc(db, "referrals", normalizedPhoneNumber) : null;
-  const accessControlRef = doc(db, "app_settings", "access_control");
 
-  const [referralSnapshot, accessControlSnapshot] = await Promise.all([
-    referralRef ? getDoc(referralRef) : Promise.resolve(null),
-    getDoc(accessControlRef),
-  ]);
-
-  const accessControlSettings = normalizeAccessControlSettings(
-    accessControlSnapshot.exists()
-      ? (accessControlSnapshot.data() as { requireReferralForInstantAccess?: boolean })
-      : null
-  );
+  const referralSnapshot = referralRef ? await getDoc(referralRef) : null;
   const referralData =
     referralSnapshot?.exists() &&
     (referralSnapshot.data() as {
@@ -534,10 +500,10 @@ async function createUserProfileFromMissingSnapshot(
           referrerDisplayName: string;
         })
       : null;
-  const accessStatus =
-    referralData || !accessControlSettings.requireReferralForInstantAccess
-      ? "active"
-      : "pending_approval";
+
+  if (!referralData) {
+    throw new Error("Referral required for sign up. Contact admin to get access.");
+  }
   const now = serverTimestamp();
   const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
   const batch = writeBatch(db);
@@ -551,7 +517,6 @@ async function createUserProfileFromMissingSnapshot(
     referredByUserId: referralData?.referrerUserId ?? null,
     referredByDisplayName: referralData?.referrerDisplayName ?? null,
     hasSeenReferralMessage: referralData ? false : true,
-    accessStatus,
     role: "user",
     balance: openingBalance,
     points: 0,

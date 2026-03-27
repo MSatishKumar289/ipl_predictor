@@ -287,12 +287,13 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         referrerData,
       } = predictionEntry;
       const transactionRef = doc(collection(db, "transactions"));
-      const shouldRewardReferral =
+      const shouldFinalizeReferral =
         !!referralRef &&
         !!referrerRef &&
         !!referrerData &&
         referralData?.status === "first_bet_pending_settlement" &&
         referralData.firstPredictionId === predictionId;
+      const shouldRewardReferral = shouldFinalizeReferral && referrerData.role !== "admin";
 
       if (winner === "no_result") {
         const refundedBalance = userData.balance + prediction.amount;
@@ -348,6 +349,13 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
             referenceId: referralRef.id,
             note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
             createdAt: serverTimestamp(),
+          });
+        } else if (shouldFinalizeReferral) {
+          transaction.update(referralRef, {
+            status: "rewarded",
+            rewardTransactionId: null,
+            rewardedAt: settlementTime,
+            updatedAt: serverTimestamp(),
           });
         }
 
@@ -412,6 +420,13 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
             note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
             createdAt: serverTimestamp(),
           });
+        } else if (shouldFinalizeReferral) {
+          transaction.update(referralRef, {
+            status: "rewarded",
+            rewardTransactionId: null,
+            rewardedAt: settlementTime,
+            updatedAt: serverTimestamp(),
+          });
         }
 
         continue;
@@ -456,6 +471,13 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
           referenceId: referralRef.id,
           note: `Referral bonus credited after first settled bet by ${prediction.userDisplayName}`,
           createdAt: serverTimestamp(),
+        });
+      } else if (shouldFinalizeReferral) {
+        transaction.update(referralRef, {
+          status: "rewarded",
+          rewardTransactionId: null,
+          rewardedAt: settlementTime,
+          updatedAt: serverTimestamp(),
         });
       }
     }

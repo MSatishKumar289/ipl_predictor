@@ -44,7 +44,7 @@ service cloud.firestore {
     }
 
     match /referrals/{referralId} {
-      allow read: if signedIn();
+      allow get: if true;
       allow list: if signedIn();
       allow create: if signedIn() &&
         request.resource.data.referrerUserId == request.auth.uid &&
@@ -66,11 +66,5 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /app_settings/{settingId} {
-      allow get: if signedIn();
-      allow list: if false;
-      allow create, update: if isAdmin();
-      allow delete: if false;
-    }
   }
 }

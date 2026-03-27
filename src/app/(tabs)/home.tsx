@@ -102,7 +102,7 @@ export default function HomeTab() {
         <View style={styles.hero}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroTextWrap}>
-              <Text style={styles.eyebrow}>Friends Premier League</Text>
+              <Text style={styles.eyebrow}>FPL</Text>
               <Text style={styles.title}>Welcome back, {profile?.displayName || "Player"}</Text>
               <Text style={styles.subtitle}>Track fixtures, place picks, and follow standings.</Text>
             </View>
