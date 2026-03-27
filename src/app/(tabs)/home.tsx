@@ -36,7 +36,12 @@ export default function HomeTab() {
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isClientReady, setIsClientReady] = useState(false);
   const isDesktop = width >= 1024;
+
+  useEffect(() => {
+    setIsClientReady(true);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches(
@@ -86,13 +91,8 @@ export default function HomeTab() {
       : activeFilter === "live"
         ? sections.live
         : sections.completed;
+  const visibleMatches = activeFilter === "upcoming" ? sections.upcoming.slice(0, 3) : activeMatches;
 
-  const todayMatches = activeFilter === "upcoming" ? sections.today : [];
-  const futureUpcomingMatches =
-    activeFilter === "upcoming"
-      ? sections.upcoming.filter((match) => !sections.today.some((todayMatch) => todayMatch.id === match.id))
-      : [];
-  const visibleFutureUpcomingMatches = futureUpcomingMatches.slice(0, 2);
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView
@@ -166,7 +166,7 @@ export default function HomeTab() {
             </View>
           ) : null}
 
-          {isLoadingMatches ? (
+          {isLoadingMatches || !isClientReady ? (
             <View style={styles.sectionLoadingState}>
               <ActivityIndicator size="large" color="#2463EB" />
               <Text style={styles.sectionLoadingText}>Loading matches...</Text>
@@ -176,39 +176,17 @@ export default function HomeTab() {
               <SectionHeader
                 title={
                   activeFilter === "upcoming"
-                    ? "Today's Matches"
+                    ? "Upcoming Matches"
                     : activeFilter === "live"
                       ? "Live Matches"
                       : "Completed Matches"
                 }
-                count={
-                  activeFilter === "upcoming"
-                    ? sections.today.length
-                    : activeFilter === "live"
-                      ? sections.live.length
-                      : sections.completed.length
-                }
+                count={visibleMatches.length}
               />
 
-              {activeFilter === "upcoming" ? (
-                todayMatches.length ? (
-                  <View style={styles.featuredList}>
-                    {todayMatches.map((match) => (
-                      <FeaturedMatchCard
-                        key={match.id}
-                        match={match}
-                        prediction={predictions[match.id] ?? null}
-                        compact={width < 768}
-                        onOpen={() => openMatch(match.id)}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <EmptyState filter={activeFilter} />
-                )
-              ) : activeMatches.length ? (
+              {visibleMatches.length ? (
                 <View style={styles.featuredList}>
-                  {activeMatches.map((match) => (
+                  {visibleMatches.map((match) => (
                     <FeaturedMatchCard
                       key={match.id}
                       match={match}
@@ -217,27 +195,9 @@ export default function HomeTab() {
                       onOpen={() => openMatch(match.id)}
                     />
                   ))}
-                </View>
-              ) : (
-                <EmptyState filter={activeFilter} />
-              )}
-
-              {activeFilter === "upcoming" && visibleFutureUpcomingMatches.length ? (
-                <View style={styles.listSection}>
-                  <Text style={styles.listSectionTitle}>Upcoming matches</Text>
-                  <View style={styles.featuredList}>
-                    {visibleFutureUpcomingMatches.map((match) => (
-                      <FeaturedMatchCard
-                        key={match.id}
-                        match={match}
-                        prediction={predictions[match.id] ?? null}
-                        compact={width < 768}
-                        onOpen={() => openMatch(match.id)}
-                      />
-                    ))}
                   </View>
-                </View>
               ) : null}
+              {!visibleMatches.length ? <EmptyState filter={activeFilter} /> : null}
             </>
           )}
         </View>
@@ -410,17 +370,13 @@ function ConfirmationBlock({
 }
 
 function buildSections(matches: MatchRecord[]) {
-  const today = matches.filter(
-    (match) =>
-      isToday(match.startAt) && match.status !== "settled" && match.status !== "no_result"
-  );
   const upcoming = matches.filter((match) => match.status === "upcoming");
   const live = matches.filter((match) => match.status === "locked" || match.status === "completed");
   const completed = matches.filter(
     (match) => match.status === "settled" || match.status === "no_result"
   );
 
-  return { today, upcoming, live, completed };
+  return { upcoming, live, completed };
 }
 
 function getMatchBadge(match: MatchRecord, prediction: PredictionRecord | null = null) {
@@ -504,17 +460,6 @@ function getRelativeDayLabel(match: MatchRecord) {
     day: "2-digit",
     month: "short",
   }).format(target);
-}
-
-function isToday(dateString: string) {
-  const value = new Date(dateString);
-  const today = new Date();
-
-  return (
-    value.getFullYear() === today.getFullYear() &&
-    value.getMonth() === today.getMonth() &&
-    value.getDate() === today.getDate()
-  );
 }
 
 function openMatch(matchId: string) {
