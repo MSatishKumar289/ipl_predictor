@@ -1,4 +1,5 @@
 export type UserRole = "user" | "admin";
+export type UserAccessStatus = "active" | "pending_approval";
 
 export type UserProfile = {
   displayName: string;
@@ -9,6 +10,7 @@ export type UserProfile = {
   referredByUserId?: string | null;
   referredByDisplayName?: string | null;
   hasSeenReferralMessage?: boolean;
+  accessStatus?: UserAccessStatus;
   role: UserRole;
   balance: number;
   points: number;

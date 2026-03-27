@@ -7,11 +7,19 @@ export function RouteFallbackScreen({
   title,
   description,
   showAuthActions = false,
+  primaryActionLabel = "Go To Home",
+  onPrimaryAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: {
   eyebrow: string;
   title: string;
   description: string;
   showAuthActions?: boolean;
+  primaryActionLabel?: string;
+  onPrimaryAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }) {
   return (
     <SafeAreaView style={styles.screen}>
@@ -40,12 +48,19 @@ export function RouteFallbackScreen({
               </Pressable>
             </View>
           ) : (
-            <Pressable
-              style={styles.primaryButton}
-              onPress={() => router.replace("/(tabs)/home")}
-            >
-              <Text style={styles.primaryButtonText}>Go To Home</Text>
-            </Pressable>
+            <>
+              <Pressable
+                style={styles.primaryButton}
+                onPress={onPrimaryAction ?? (() => router.replace("/(tabs)/home"))}
+              >
+                <Text style={styles.primaryButtonText}>{primaryActionLabel}</Text>
+              </Pressable>
+              {secondaryActionLabel && onSecondaryAction ? (
+                <Pressable style={styles.linkButton} onPress={onSecondaryAction}>
+                  <Text style={styles.linkButtonText}>{secondaryActionLabel}</Text>
+                </Pressable>
+              ) : null}
+            </>
           )}
         </View>
       </View>
@@ -136,6 +151,16 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: "#DDE5F7",
     fontSize: 15,
+    fontWeight: "700",
+  },
+  linkButton: {
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  linkButtonText: {
+    color: "#8FB4FF",
+    fontSize: 14,
     fontWeight: "700",
   },
 });

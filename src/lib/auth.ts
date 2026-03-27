@@ -10,13 +10,19 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
+  query,
   runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
+  writeBatch,
 } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 
-import { getFirebaseServices } from "./firebase";
+import { getFirebaseFunctions, getFirebaseServices } from "./firebase";
+import { normalizeAccessControlSettings } from "./access-control";
 import type { UserProfile, UserProfileRecord } from "./auth-types";
 import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
@@ -96,6 +102,12 @@ export async function signUpWithPhone({
   const credential = await createUserWithEmailAndPassword(auth, authEmail, password);
 
   await updateProfile(credential.user, { displayName: normalizedDisplayName });
+  await ensureUserProfile(credential.user, {
+    displayName: normalizedDisplayName,
+    phoneNumber: normalizedPhoneNumber,
+    authEmail,
+    grantSignupBonusIfNew: true,
+  });
 
   return credential.user;
 }
@@ -185,6 +197,97 @@ export function subscribeToLeaderboardUsers(
   );
 }
 
+export function subscribeToAllUsers(
+  callback: (users: UserProfileRecord[]) => void,
+  onError?: (error: Error) => void
+) {
+  const { db } = getFirebaseServices();
+  return onSnapshot(
+    collection(db, "users"),
+    (snapshot) => {
+      const users = snapshot.docs
+        .map((userDoc) => ({
+          uid: userDoc.id,
+          ...(userDoc.data() as UserProfile),
+        }))
+        .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+      callback(users);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
+export async function approveUserAccess(uid: string) {
+  const { db } = getFirebaseServices();
+  await updateDoc(doc(db, "users", uid), {
+    accessStatus: "active",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function rejectPendingUser(uid: string) {
+  const functions = getFirebaseFunctions();
+  const callable = httpsCallable(functions, "rejectPendingUser");
+  await callable({ targetUserId: uid });
+}
+
+export async function deleteUserRecords(uid: string) {
+  const { db } = getFirebaseServices();
+  const userRef = doc(db, "users", uid);
+  const predictionsQuery = query(collection(db, "predictions"), where("userId", "==", uid));
+  const transactionsQuery = query(collection(db, "transactions"), where("userId", "==", uid));
+  const referralsByReferrerQuery = query(
+    collection(db, "referrals"),
+    where("referrerUserId", "==", uid)
+  );
+  const referralsByReferredQuery = query(
+    collection(db, "referrals"),
+    where("referredUserId", "==", uid)
+  );
+
+  const [predictionSnapshots, transactionSnapshots, referrerReferralSnapshots, referredReferralSnapshots] =
+    await Promise.all([
+      getDocs(predictionsQuery),
+      getDocs(transactionsQuery),
+      getDocs(referralsByReferrerQuery),
+      getDocs(referralsByReferredQuery),
+    ]);
+
+  const refsToDelete = new Map<string, ReturnType<typeof doc>>();
+  refsToDelete.set(userRef.path, userRef);
+
+  for (const snapshot of predictionSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  for (const snapshot of transactionSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  for (const snapshot of referrerReferralSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  for (const snapshot of referredReferralSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  const refs = [...refsToDelete.values()];
+
+  for (let index = 0; index < refs.length; index += 400) {
+    const batch = writeBatch(db);
+
+    for (const ref of refs.slice(index, index + 400)) {
+      batch.delete(ref);
+    }
+
+    await batch.commit();
+  }
+}
+
 export async function ensureUserProfile(
   user: User,
   {
@@ -192,15 +295,33 @@ export async function ensureUserProfile(
     phoneNumber,
     authEmail,
     grantSignupBonusIfNew = true,
+    profileKnownMissing = false,
   }: {
     displayName?: string;
     phoneNumber?: string;
     authEmail?: string;
     grantSignupBonusIfNew?: boolean;
+    profileKnownMissing?: boolean;
   }
 ) {
   const { db } = getFirebaseServices();
   const userRef = doc(db, "users", user.uid);
+
+  if (profileKnownMissing) {
+    const resolvedDisplayName = validateDisplayName(
+      displayName ?? user.displayName ?? user.email?.split("@")[0] ?? ""
+    );
+
+    await createUserProfileFromMissingSnapshot(user, {
+      displayName: resolvedDisplayName,
+      phoneNumber,
+      authEmail,
+      grantSignupBonus: grantSignupBonusIfNew,
+    });
+
+    return null;
+  }
+
   const snapshot = await getDoc(userRef);
 
   if (snapshot.exists()) {
@@ -214,18 +335,39 @@ export async function ensureUserProfile(
       (!looksLikePhoneLabel(user.displayName) ? user.displayName : null) ??
       profile.displayName;
 
-    if (normalizedPhoneNumber && resolvedAuthEmail) {
-      await updateDoc(userRef, {
-        displayName: looksLikePhoneLabel(profile.displayName) ? resolvedDisplayName : profile.displayName,
-        phoneNumber: normalizedPhoneNumber,
-        email: resolvedAuthEmail,
-        loginMethod: "phone",
-        updatedAt: serverTimestamp(),
-      });
+    const nextDisplayName = looksLikePhoneLabel(profile.displayName)
+      ? resolvedDisplayName
+      : profile.displayName;
+
+    const profileUpdates: Partial<UserProfile> & { updatedAt?: ReturnType<typeof serverTimestamp> } = {};
+
+    if (normalizedPhoneNumber && profile.phoneNumber !== normalizedPhoneNumber) {
+      profileUpdates.phoneNumber = normalizedPhoneNumber;
     }
 
-    const updatedSnapshot = await getDoc(userRef);
-    return updatedSnapshot.exists() ? (updatedSnapshot.data() as UserProfile) : profile;
+    if (resolvedAuthEmail && profile.email !== resolvedAuthEmail) {
+      profileUpdates.email = resolvedAuthEmail;
+    }
+
+    if (nextDisplayName !== profile.displayName) {
+      profileUpdates.displayName = nextDisplayName;
+    }
+
+    if (normalizedPhoneNumber && profile.loginMethod !== "phone") {
+      profileUpdates.loginMethod = "phone";
+    }
+
+    if (Object.keys(profileUpdates).length) {
+      profileUpdates.updatedAt = serverTimestamp();
+      await updateDoc(userRef, profileUpdates);
+
+      return {
+        ...profile,
+        ...profileUpdates,
+      } as UserProfile;
+    }
+
+    return profile;
   }
 
   const resolvedDisplayName = validateDisplayName(
@@ -239,8 +381,7 @@ export async function ensureUserProfile(
     grantSignupBonus: grantSignupBonusIfNew,
   });
 
-  const createdSnapshot = await getDoc(userRef);
-  return createdSnapshot.exists() ? (createdSnapshot.data() as UserProfile) : null;
+  return null;
 }
 
 async function createUserProfile(
@@ -266,6 +407,7 @@ async function createUserProfile(
   const userRef = doc(db, "users", user.uid);
   const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
   const referralRef = normalizedPhoneNumber ? doc(db, "referrals", normalizedPhoneNumber) : null;
+  const accessControlRef = doc(db, "app_settings", "access_control");
 
   await runTransaction(db, async (transaction) => {
     const existingUser = await transaction.get(userRef);
@@ -275,6 +417,12 @@ async function createUserProfile(
     }
 
     const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
+    const accessControlSnapshot = await transaction.get(accessControlRef);
+    const accessControlSettings = normalizeAccessControlSettings(
+      accessControlSnapshot.exists()
+        ? (accessControlSnapshot.data() as { requireReferralForInstantAccess?: boolean })
+        : null
+    );
     const referralData =
       referralSnapshot?.exists() &&
       (referralSnapshot.data() as { status?: string; referrerUserId?: string; referrerDisplayName?: string })
@@ -285,6 +433,10 @@ async function createUserProfile(
             referrerDisplayName: string;
           })
         : null;
+    const accessStatus =
+      referralData || !accessControlSettings.requireReferralForInstantAccess
+        ? "active"
+        : "pending_approval";
 
     const now = serverTimestamp();
     const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
@@ -298,6 +450,7 @@ async function createUserProfile(
       referredByUserId: referralData?.referrerUserId ?? null,
       referredByDisplayName: referralData?.referrerDisplayName ?? null,
       hasSeenReferralMessage: referralData ? false : true,
+      accessStatus,
       role: "user",
       balance: openingBalance,
       points: 0,
@@ -331,4 +484,106 @@ async function createUserProfile(
       });
     }
   });
+}
+
+async function createUserProfileFromMissingSnapshot(
+  user: User,
+  {
+    displayName,
+    phoneNumber,
+    authEmail,
+    grantSignupBonus,
+  }: {
+    displayName: string;
+    phoneNumber?: string;
+    authEmail?: string;
+    grantSignupBonus: boolean;
+  }
+) {
+  const { db } = getFirebaseServices();
+  const normalizedDisplayName = validateDisplayName(displayName);
+  const resolvedAuthEmail = authEmail ?? user.email ?? "";
+  const normalizedPhoneNumber =
+    (phoneNumber ? normalizePhoneNumber(phoneNumber) : null) ??
+    getPhoneNumberFromAuthEmail(resolvedAuthEmail);
+  const userRef = doc(db, "users", user.uid);
+  const signupBonusRef = doc(collection(db, "transactions"), `signup_bonus_${user.uid}`);
+  const referralRef = normalizedPhoneNumber ? doc(db, "referrals", normalizedPhoneNumber) : null;
+  const accessControlRef = doc(db, "app_settings", "access_control");
+
+  const [referralSnapshot, accessControlSnapshot] = await Promise.all([
+    referralRef ? getDoc(referralRef) : Promise.resolve(null),
+    getDoc(accessControlRef),
+  ]);
+
+  const accessControlSettings = normalizeAccessControlSettings(
+    accessControlSnapshot.exists()
+      ? (accessControlSnapshot.data() as { requireReferralForInstantAccess?: boolean })
+      : null
+  );
+  const referralData =
+    referralSnapshot?.exists() &&
+    (referralSnapshot.data() as {
+      status?: string;
+      referrerUserId?: string;
+      referrerDisplayName?: string;
+    }).status === "pending"
+      ? (referralSnapshot.data() as {
+          status: string;
+          referrerUserId: string;
+          referrerDisplayName: string;
+        })
+      : null;
+  const accessStatus =
+    referralData || !accessControlSettings.requireReferralForInstantAccess
+      ? "active"
+      : "pending_approval";
+  const now = serverTimestamp();
+  const openingBalance = grantSignupBonus ? SIGNUP_BONUS : 0;
+  const batch = writeBatch(db);
+
+  batch.set(userRef, {
+    displayName: normalizedDisplayName,
+    email: resolvedAuthEmail,
+    phoneNumber: normalizedPhoneNumber,
+    loginMethod: normalizedPhoneNumber ? "phone" : "email",
+    referralId: referralData && referralRef ? referralRef.id : null,
+    referredByUserId: referralData?.referrerUserId ?? null,
+    referredByDisplayName: referralData?.referrerDisplayName ?? null,
+    hasSeenReferralMessage: referralData ? false : true,
+    accessStatus,
+    role: "user",
+    balance: openingBalance,
+    points: 0,
+    wins: 0,
+    losses: 0,
+    totalPredictions: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  if (referralData && referralRef) {
+    batch.update(referralRef, {
+      referredUserId: user.uid,
+      status: "signed_up",
+      rewardAmount: REFERRAL_REWARD_AMOUNT,
+      updatedAt: now,
+    });
+  }
+
+  if (grantSignupBonus) {
+    batch.set(signupBonusRef, {
+      userId: user.uid,
+      type: "signup_bonus",
+      amount: SIGNUP_BONUS,
+      balanceBefore: 0,
+      balanceAfter: SIGNUP_BONUS,
+      referenceType: "system",
+      referenceId: user.uid,
+      note: "Signup bonus credited on account creation",
+      createdAt: now,
+    });
+  }
+
+  await batch.commit();
 }

@@ -7,12 +7,14 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { router } from "expo-router";
 
 import { QuestionIcon } from "@/components/QuestionIcon";
 
 type QuickRulesWidgetProps = {
   enabled: boolean;
   autoOpen: boolean;
+  variant?: "help" | "admin";
 };
 
 const quickSteps = [
@@ -23,11 +25,16 @@ const quickSteps = [
   "Win your pick and grow your balance.",
 ];
 
-export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
+export function QuickRulesWidget({
+  enabled,
+  autoOpen,
+  variant = "help",
+}: QuickRulesWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const hasAutoOpenedRef = useRef(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const isAdmin = variant === "admin";
 
   useEffect(() => {
     if (!enabled) {
@@ -44,6 +51,17 @@ export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
 
   if (!enabled) {
     return null;
+  }
+
+  if (isAdmin) {
+    return (
+      <Pressable
+        style={[styles.fab, styles.adminFab, isDesktop ? styles.fabDesktop : null]}
+        onPress={() => router.push("/admin")}
+      >
+        <Text style={styles.adminFabText}>AD</Text>
+      </Pressable>
+    );
   }
 
   return (
@@ -99,9 +117,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
+  adminFab: {
+    backgroundColor: "rgba(26, 78, 168, 0.86)",
+    borderColor: "rgba(113, 164, 255, 0.8)",
+  },
   fabDesktop: {
     right: 28,
     bottom: 34,
+  },
+  adminFabText: {
+    color: "#F6FAFF",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.8,
   },
   overlay: {
     flex: 1,
