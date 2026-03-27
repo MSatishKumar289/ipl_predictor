@@ -9,6 +9,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  writeBatch,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -17,11 +18,42 @@ import { db } from "./firebase";
 import type { UserProfile } from "./auth-types";
 import type { CreateMatchInput, MatchOutcome, MatchRecord, MatchStatus } from "./match-types";
 import type { PredictionRecord } from "./prediction-types";
+import type { ReferralRecord } from "./referral-types";
 import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
 const MATCH_LOCK_MINUTES = 30;
 const BETTING_OPEN_HOURS = 24;
 const WIN_POINTS = 3;
+const SETTLEMENT_TRANSACTION_TYPES = new Set(["match_win_payout", "match_refund_no_result"]);
+
+type SettlementSnapshotMeta = {
+  matchId: string;
+  matchNumber: number;
+  matchLabel: string;
+  teamAShort: string;
+  teamBShort: string;
+  createdBy: string;
+  reason: "pre_settlement_backup";
+  statusBeforeSettlement: MatchStatus;
+  winnerBeforeSettlement: MatchOutcome;
+  settledAtBeforeSettlement: string | null;
+  settledByBeforeSettlement: string | null;
+  isSettlementApplied: boolean;
+  settlementAppliedAt: unknown;
+  isRestored: boolean;
+  restoredAt: unknown;
+  restoredBy: string | null;
+  createdAt: unknown;
+  updatedAt: unknown;
+};
+export type SettlementBackupAvailability = Record<
+  string,
+  {
+    snapshotId: string;
+    hasBackup: boolean;
+    createdAt: unknown;
+  }
+>;
 
 export type BettingState = "closed" | "bet_open" | "bet_locked" | "completed";
 
@@ -100,6 +132,114 @@ function normalizeMatch(matchDoc: { id: string; data: Omit<MatchRecord, "id"> })
       settledAt: data.settledAt,
     }),
   };
+}
+
+function getTimestampValue(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return 0;
+}
+
+async function createSettlementSnapshot(
+  match: MatchRecord,
+  predictionDocs: Awaited<ReturnType<typeof getDocs>>["docs"],
+  adminUserId: string
+) {
+  const snapshotRef = doc(collection(db, "settlement_snapshots"));
+  const userIds = [
+    ...new Set(
+      predictionDocs.map((entry) => (entry.data() as Omit<PredictionRecord, "id">).userId)
+    ),
+  ];
+  const userSnapshots = await Promise.all(userIds.map((userId) => getDoc(doc(db, "users", userId))));
+  const referralIds = [
+    ...new Set(
+      userSnapshots
+        .filter((entry) => entry.exists())
+        .map((entry) => (entry.data() as UserProfile).referralId)
+        .filter((value): value is string => !!value)
+    ),
+  ];
+  const referralSnapshots = await Promise.all(
+    referralIds.map((referralId) => getDoc(doc(db, "referrals", referralId)))
+  );
+  const batch = writeBatch(db);
+
+  batch.set(snapshotRef, {
+    matchId: match.id,
+    matchNumber: match.matchNumber,
+    matchLabel: `${match.teamAShort} vs ${match.teamBShort}`,
+    teamAShort: match.teamAShort,
+    teamBShort: match.teamBShort,
+    createdBy: adminUserId,
+    reason: "pre_settlement_backup",
+    statusBeforeSettlement: match.status,
+    winnerBeforeSettlement: match.winner,
+    settledAtBeforeSettlement: match.settledAt ?? null,
+    settledByBeforeSettlement: match.settledBy ?? null,
+    isSettlementApplied: false,
+    settlementAppliedAt: null,
+    isRestored: false,
+    restoredAt: null,
+    restoredBy: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  } satisfies SettlementSnapshotMeta);
+
+  for (const userSnapshot of userSnapshots) {
+    if (!userSnapshot.exists()) {
+      continue;
+    }
+
+    batch.set(doc(db, "settlement_snapshots", snapshotRef.id, "users", userSnapshot.id), {
+      ...(userSnapshot.data() as UserProfile),
+    });
+  }
+
+  for (const predictionDoc of predictionDocs) {
+    batch.set(doc(db, "settlement_snapshots", snapshotRef.id, "predictions", predictionDoc.id), {
+      ...(predictionDoc.data() as Omit<PredictionRecord, "id">),
+    });
+  }
+
+  for (const referralSnapshot of referralSnapshots) {
+    if (!referralSnapshot.exists()) {
+      continue;
+    }
+
+    batch.set(doc(db, "settlement_snapshots", snapshotRef.id, "referrals", referralSnapshot.id), {
+      ...(referralSnapshot.data() as Omit<ReferralRecord, "id">),
+    });
+  }
+
+  await batch.commit();
+
+  return snapshotRef;
 }
 
 export function subscribeToMatches(
@@ -203,6 +343,7 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
   const predictionSnapshots = await getDocs(
     query(collection(db, "predictions"), where("matchId", "==", matchId))
   );
+  const snapshotRef = await createSettlementSnapshot(match, predictionSnapshots.docs, adminUserId);
 
   await runTransaction(db, async (transaction) => {
     const latestMatchSnapshot = await transaction.get(matchRef);
@@ -489,7 +630,137 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       settledBy: adminUserId,
       updatedAt: serverTimestamp(),
     });
+
+    transaction.update(snapshotRef, {
+      isSettlementApplied: true,
+      settlementAppliedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   });
+}
+
+export function subscribeToSettlementBackupAvailability(
+  callback: (availability: SettlementBackupAvailability) => void,
+  onError?: (error: Error) => void
+) {
+  return onSnapshot(
+    collection(db, "settlement_snapshots"),
+    (snapshot) => {
+      const nextAvailability = snapshot.docs
+        .map((entry) => ({
+          id: entry.id,
+          ...(entry.data() as SettlementSnapshotMeta),
+        }))
+        .sort((left, right) => getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt))
+        .reduce<SettlementBackupAvailability>((accumulator, entry) => {
+          if (accumulator[entry.matchId]) {
+            return accumulator;
+          }
+
+          accumulator[entry.matchId] = {
+            snapshotId: entry.id,
+            hasBackup: entry.isSettlementApplied && !entry.isRestored,
+            createdAt: entry.createdAt,
+          };
+
+          return accumulator;
+        }, {});
+
+      callback(nextAvailability);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
+export async function revertMatchSettlement(matchId: string, adminUserId: string) {
+  const snapshotQuery = await getDocs(
+    query(collection(db, "settlement_snapshots"), where("matchId", "==", matchId))
+  );
+  const latestSnapshot = snapshotQuery.docs
+    .map((entry) => ({
+      id: entry.id,
+      ...(entry.data() as SettlementSnapshotMeta),
+    }))
+    .filter((entry) => entry.isSettlementApplied && !entry.isRestored)
+    .sort((left, right) => getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt))[0];
+
+  if (!latestSnapshot) {
+    throw new Error("No settlement backup is available for this match.");
+  }
+
+  const snapshotId = latestSnapshot.id;
+  const [userSnapshots, predictionSnapshots, referralSnapshots, settlementTransactions] =
+    await Promise.all([
+      getDocs(collection(db, "settlement_snapshots", snapshotId, "users")),
+      getDocs(collection(db, "settlement_snapshots", snapshotId, "predictions")),
+      getDocs(collection(db, "settlement_snapshots", snapshotId, "referrals")),
+      getDocs(
+        query(
+          collection(db, "transactions"),
+          where("referenceType", "==", "match"),
+          where("referenceId", "==", matchId)
+        )
+      ),
+    ]);
+
+  const rewardTransactionIds = referralSnapshots.docs
+    .map((entry) => entry.data().rewardTransactionId)
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const batch = writeBatch(db);
+
+  for (const userSnapshot of userSnapshots.docs) {
+    const data = userSnapshot.data() as UserProfile;
+    batch.update(doc(db, "users", userSnapshot.id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  for (const predictionSnapshot of predictionSnapshots.docs) {
+    const data = predictionSnapshot.data() as Omit<PredictionRecord, "id">;
+    batch.update(doc(db, "predictions", predictionSnapshot.id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  for (const referralSnapshot of referralSnapshots.docs) {
+    const data = referralSnapshot.data() as Omit<ReferralRecord, "id">;
+    batch.update(doc(db, "referrals", referralSnapshot.id), {
+      ...data,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  for (const transactionSnapshot of settlementTransactions.docs) {
+    const data = transactionSnapshot.data();
+    if (SETTLEMENT_TRANSACTION_TYPES.has(String(data.type))) {
+      batch.delete(doc(db, "transactions", transactionSnapshot.id));
+    }
+  }
+
+  for (const rewardTransactionId of rewardTransactionIds) {
+    batch.delete(doc(db, "transactions", rewardTransactionId));
+  }
+
+  batch.update(doc(db, "matches", matchId), {
+    winner: latestSnapshot.winnerBeforeSettlement,
+    status: latestSnapshot.statusBeforeSettlement,
+    settledAt: latestSnapshot.settledAtBeforeSettlement,
+    settledBy: latestSnapshot.settledByBeforeSettlement,
+    updatedAt: serverTimestamp(),
+  });
+
+  batch.update(doc(db, "settlement_snapshots", snapshotId), {
+    isRestored: true,
+    restoredAt: serverTimestamp(),
+    restoredBy: adminUserId,
+    updatedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
 }
 
 export function formatMatchDate(dateString: string) {

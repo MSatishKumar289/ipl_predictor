@@ -96,6 +96,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    minWidth: 0,
+    flexShrink: 1,
   },
   rowCenter: {
     justifyContent: "center",
@@ -122,8 +124,10 @@ const styles = StyleSheet.create({
   },
   prefixText: {
     includeFontPadding: false,
+    flexShrink: 0,
   },
   valueText: {
     includeFontPadding: false,
+    flexShrink: 1,
   },
 });
