@@ -67,7 +67,11 @@ function AuthGate() {
           contentStyle: { backgroundColor: "#0A1325" },
         }}
       />
-      <QuickRulesWidget enabled={shouldShowQuickRules} autoOpen={shouldShowQuickRules} />
+      <QuickRulesWidget
+        enabled={shouldShowQuickRules}
+        autoOpen={shouldShowQuickRules}
+        userId={user?.uid}
+      />
       <QuickRulesWidget enabled={shouldShowAdminFab} autoOpen={false} variant="admin" />
     </>
   );

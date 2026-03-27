@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Modal,
   Pressable,
@@ -14,6 +15,7 @@ import { QuestionIcon } from "@/components/QuestionIcon";
 type QuickRulesWidgetProps = {
   enabled: boolean;
   autoOpen: boolean;
+  userId?: string;
   variant?: "help" | "admin";
 };
 
@@ -28,6 +30,7 @@ const quickSteps = [
 export function QuickRulesWidget({
   enabled,
   autoOpen,
+  userId,
   variant = "help",
 }: QuickRulesWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -35,6 +38,7 @@ export function QuickRulesWidget({
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const isAdmin = variant === "admin";
+  const quickRulesSeenKey = userId ? `quick_rules_seen_${userId}` : null;
 
   useEffect(() => {
     if (!enabled) {
@@ -43,11 +47,37 @@ export function QuickRulesWidget({
       return;
     }
 
-    if (autoOpen && !hasAutoOpenedRef.current) {
+    if (isAdmin || !autoOpen || !quickRulesSeenKey || hasAutoOpenedRef.current) {
+      return;
+    }
+
+    let isActive = true;
+
+    void AsyncStorage.getItem(quickRulesSeenKey).then((value) => {
+      if (!isActive || value === "true") {
+        return;
+      }
+
       setIsOpen(true);
       hasAutoOpenedRef.current = true;
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [autoOpen, enabled, isAdmin, quickRulesSeenKey]);
+
+  useEffect(() => {
+    hasAutoOpenedRef.current = false;
+  }, [quickRulesSeenKey]);
+
+  async function handleClose() {
+    setIsOpen(false);
+
+    if (quickRulesSeenKey) {
+      await AsyncStorage.setItem(quickRulesSeenKey, "true");
     }
-  }, [autoOpen, enabled]);
+  }
 
   if (!enabled) {
     return null;
@@ -70,9 +100,9 @@ export function QuickRulesWidget({
         <QuestionIcon />
       </Pressable>
 
-      <Modal animationType="fade" transparent visible={isOpen} onRequestClose={() => setIsOpen(false)}>
+      <Modal animationType="fade" transparent visible={isOpen} onRequestClose={() => void handleClose()}>
         <View style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} />
+          <Pressable style={styles.backdrop} onPress={() => void handleClose()} />
           <View style={[styles.card, isDesktop ? styles.cardDesktop : null]}>
             <View style={styles.handle} />
             <Text style={styles.title}>Get Started with FPL</Text>
@@ -87,7 +117,7 @@ export function QuickRulesWidget({
               ))}
             </View>
 
-            <Pressable style={styles.closeButton} onPress={() => setIsOpen(false)}>
+            <Pressable style={styles.closeButton} onPress={() => void handleClose()}>
               <Text style={styles.closeButtonText}>Close</Text>
             </Pressable>
           </View>
