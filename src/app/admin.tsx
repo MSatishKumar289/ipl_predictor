@@ -27,14 +27,10 @@ import {
   subscribeToMatches,
   updateMatchSettings,
 } from "@/lib/matches";
-import {
-  subscribeToAccessControlSettings,
-  updateAccessControlSettings,
-} from "@/lib/access-control";
-import { approveUserAccess, deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
+import { deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
 import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/ipl-teams";
 import type { MatchRecord } from "@/lib/match-types";
-import type { UserAccessStatus, UserProfileRecord } from "@/lib/auth-types";
+import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type PendingSettlement = {
@@ -47,7 +43,6 @@ type PendingSettlement = {
 type PickerMode = "date" | "time" | null;
 type AdminMatchView = "live" | "results";
 type AdminSection = "matches" | "users";
-type AdminUserView = "active" | "pending";
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -70,11 +65,8 @@ export default function AdminScreen() {
   const [isSettling, setIsSettling] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>("users");
   const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
-  const [activeUserView, setActiveUserView] = useState<AdminUserView>("active");
-  const [pendingApprovalUserId, setPendingApprovalUserId] = useState<string | null>(null);
+  const [pendingUserActionId, setPendingUserActionId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfileRecord | null>(null);
-  const [requireReferralForInstantAccess, setRequireReferralForInstantAccess] = useState(true);
-  const [isUpdatingAccessControl, setIsUpdatingAccessControl] = useState(false);
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
 
@@ -102,19 +94,6 @@ export default function AdminScreen() {
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToAccessControlSettings(
-      (settings) => {
-        setRequireReferralForInstantAccess(settings.requireReferralForInstantAccess);
-      },
-      () => {
-        setRequireReferralForInstantAccess(true);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
-
   const liveMatches = useMemo(() => {
     return [...matches].filter((match) => match.status === "locked").reverse();
   }, [matches]);
@@ -129,14 +108,6 @@ export default function AdminScreen() {
       .reverse();
   }, [matches]);
   const visibleMatches = activeMatchView === "live" ? liveMatches : resultMatches;
-  const activeUsers = useMemo(
-    () => users.filter((entry) => getUserAccessStatus(entry) !== "pending_approval"),
-    [users]
-  );
-  const pendingUsers = useMemo(
-    () => users.filter((entry) => getUserAccessStatus(entry) === "pending_approval"),
-    [users]
-  );
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
   const isDesktop = width >= 1024;
@@ -281,31 +252,13 @@ export default function AdminScreen() {
     }
   }
 
-  async function handleApproveUser(targetUserId: string) {
-    if (pendingApprovalUserId) {
-      return;
-    }
-
-    try {
-      setPendingApprovalUserId(targetUserId);
-      await approveUserAccess(targetUserId);
-      setSelectedUser(null);
-      Alert.alert("Access approved", "The user can now access the app.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to approve user access.";
-      Alert.alert("Approval failed", message);
-    } finally {
-      setPendingApprovalUserId(null);
-    }
-  }
-
   async function handleDeleteUserRecords(targetUserId: string) {
-    if (pendingApprovalUserId) {
+    if (pendingUserActionId) {
       return;
     }
 
     try {
-      setPendingApprovalUserId(targetUserId);
+      setPendingUserActionId(targetUserId);
       await deleteUserRecords(targetUserId);
       setSelectedUser(null);
       Alert.alert("Records deleted", "The user's Firestore records have been removed.");
@@ -314,26 +267,7 @@ export default function AdminScreen() {
         error instanceof Error ? error.message : "Unable to delete the user's records.";
       Alert.alert("Delete failed", message);
     } finally {
-      setPendingApprovalUserId(null);
-    }
-  }
-
-  async function handleToggleAccessControl(nextValue: boolean) {
-    const previousValue = requireReferralForInstantAccess;
-
-    try {
-      setIsUpdatingAccessControl(true);
-      setRequireReferralForInstantAccess(nextValue);
-      await updateAccessControlSettings({
-        requireReferralForInstantAccess: nextValue,
-      });
-    } catch (error) {
-      setRequireReferralForInstantAccess(previousValue);
-      const message =
-        error instanceof Error ? error.message : "Unable to update access-control settings.";
-      Alert.alert("Update failed", message);
-    } finally {
-      setIsUpdatingAccessControl(false);
+      setPendingUserActionId(null);
     }
   }
 
@@ -398,18 +332,15 @@ export default function AdminScreen() {
       </View>
     </View>
   ) : null;
-  const selectedUserStatus = selectedUser ? getUserAccessStatus(selectedUser) : null;
   const userDialog = selectedUser ? (
     <View style={styles.modalOverlay}>
       <Pressable style={styles.modalBackdrop} onPress={() => setSelectedUser(null)} />
       <View style={styles.confirmCard}>
         <View style={styles.modalHeader}>
-          <View style={styles.modalHeaderTextWrap}>
-            <Text style={styles.confirmTitle}>
-              {selectedUserStatus === "pending_approval" ? "Pending Request" : "User Details"}
-            </Text>
-            <Text style={styles.confirmText}>{selectedUser.displayName}</Text>
-          </View>
+            <View style={styles.modalHeaderTextWrap}>
+              <Text style={styles.confirmTitle}>User Details</Text>
+              <Text style={styles.confirmText}>{selectedUser.displayName}</Text>
+            </View>
           <Pressable style={styles.modalCloseButton} onPress={() => setSelectedUser(null)}>
             <CloseIcon />
           </Pressable>
@@ -424,65 +355,46 @@ export default function AdminScreen() {
             <DetailRow label="Email" value={selectedUser.email || "-"} />
             <DetailRow label="Role" value={selectedUser.role === "admin" ? "Admin" : "User"} />
             <DetailRow label="Status" value={formatUserAccessStatus(selectedUser)} />
-            {selectedUserStatus !== "pending_approval" ? (
-              <>
-                <DetailRow
-                  label="Coins"
-                  value={selectedUser.balance.toLocaleString("en-IN")}
-                />
-                <DetailRow label="Points" value={selectedUser.points.toLocaleString("en-IN")} />
-                <DetailRow label="Wins" value={String(selectedUser.wins)} />
-                <DetailRow label="Losses" value={String(selectedUser.losses)} />
-                <DetailRow
-                  label="Total Predictions"
-                  value={selectedUser.totalPredictions.toLocaleString("en-IN")}
-                />
-                <DetailRow
-                  label="Login Method"
-                  value={selectedUser.loginMethod === "phone" ? "Phone" : "Email"}
-                />
-                <DetailRow
-                  label="Referred By"
-                  value={selectedUser.referredByDisplayName || "-"}
-                />
-                <DetailRow label="Referral Id" value={selectedUser.referralId || "-"} />
-              </>
-            ) : null}
+            <DetailRow
+              label="Coins"
+              value={selectedUser.balance.toLocaleString("en-IN")}
+            />
+            <DetailRow label="Points" value={selectedUser.points.toLocaleString("en-IN")} />
+            <DetailRow label="Wins" value={String(selectedUser.wins)} />
+            <DetailRow label="Losses" value={String(selectedUser.losses)} />
+            <DetailRow
+              label="Total Predictions"
+              value={selectedUser.totalPredictions.toLocaleString("en-IN")}
+            />
+            <DetailRow
+              label="Login Method"
+              value={selectedUser.loginMethod === "phone" ? "Phone" : "Email"}
+            />
+            <DetailRow
+              label="Referred By"
+              value={selectedUser.referredByDisplayName || "-"}
+            />
+            <DetailRow label="Referral Id" value={selectedUser.referralId || "-"} />
           </View>
           <Text style={styles.confirmHint}>
             This deletes app records only. Firebase Auth will remain until you remove it manually.
           </Text>
 
-          {selectedUserStatus === "pending_approval" ? (
-            <Pressable
-              style={[styles.confirmPrimaryButton, pendingApprovalUserId && styles.buttonDisabled]}
-              onPress={() => handleApproveUser(selectedUser.uid)}
-              disabled={!!pendingApprovalUserId}
-            >
-              {pendingApprovalUserId === selectedUser.uid ? (
-                <ActivityIndicator size="small" color="#F7FAFF" />
-              ) : (
-                <Text style={styles.confirmPrimaryButtonText}>Accept</Text>
-              )}
-            </Pressable>
-          ) : null}
-          {selectedUserStatus !== "pending_approval" ? (
-            <Pressable
-              style={[styles.confirmDangerButton, pendingApprovalUserId && styles.buttonDisabled]}
-              onPress={() => handleDeleteUserRecords(selectedUser.uid)}
-              disabled={!!pendingApprovalUserId}
-            >
-              {pendingApprovalUserId === selectedUser.uid ? (
-                <ActivityIndicator size="small" color="#F7FAFF" />
-              ) : (
-                <Text style={styles.confirmPrimaryButtonText}>Delete User Records</Text>
-              )}
-            </Pressable>
-          ) : null}
           <Pressable
-            style={[styles.confirmSecondaryButton, pendingApprovalUserId && styles.buttonDisabled]}
+            style={[styles.confirmDangerButton, pendingUserActionId && styles.buttonDisabled]}
+            onPress={() => handleDeleteUserRecords(selectedUser.uid)}
+            disabled={!!pendingUserActionId}
+          >
+            {pendingUserActionId === selectedUser.uid ? (
+              <ActivityIndicator size="small" color="#F7FAFF" />
+            ) : (
+              <Text style={styles.confirmPrimaryButtonText}>Delete User Records</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.confirmSecondaryButton, pendingUserActionId && styles.buttonDisabled]}
             onPress={() => setSelectedUser(null)}
-            disabled={!!pendingApprovalUserId}
+            disabled={!!pendingUserActionId}
           >
             <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
           </Pressable>
@@ -708,7 +620,7 @@ export default function AdminScreen() {
                             </View>
                             <Switch
                               value={match.isEditableBeforeLock}
-                              onValueChange={(value) => handleToggleEditing(match.id, value)}
+                              onValueChange={(value: boolean) => handleToggleEditing(match.id, value)}
                               trackColor={{ false: "#334C76", true: "#1E5AE0" }}
                               thumbColor="#F7FAFF"
                             />
@@ -764,42 +676,12 @@ export default function AdminScreen() {
                   )}
                 </View>
               </>
-            ) : (
-              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-                <Text style={styles.cardTitle}>Users List</Text>
-                <View style={styles.adminSettingRow}>
-                  <View style={styles.adminSettingLabelWrap}>
-                    <Text style={styles.adminSettingTitle}>Require referral for instant access</Text>
-                    <Text style={styles.adminSettingText}>
-                      ON = non-referred users wait for approval. OFF = all new users get access
-                      immediately.
-                    </Text>
-                  </View>
-                  <Switch
-                    value={requireReferralForInstantAccess}
-                    onValueChange={handleToggleAccessControl}
-                    disabled={isUpdatingAccessControl}
-                    trackColor={{ false: "#334C76", true: "#1E5AE0" }}
-                    thumbColor="#F7FAFF"
-                  />
-                </View>
-                <View style={styles.viewTabs}>
-                  <AdminTabButton
-                    label="Approved"
-                    active={activeUserView === "active"}
-                    onPress={() => setActiveUserView("active")}
-                    compact
-                  />
-                  <AdminTabButton
-                    label="Pending"
-                    active={activeUserView === "pending"}
-                    onPress={() => setActiveUserView("pending")}
-                    compact
-                  />
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
+              ) : (
+                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                  <Text style={styles.cardTitle}>Users List</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.userTableScrollContent}
                 >
                   <View style={styles.userTable}>
@@ -816,43 +698,23 @@ export default function AdminScreen() {
                       <View style={[styles.userCell, styles.userRoleCell]}>
                         <Text style={styles.userTableHeaderText}>Role</Text>
                       </View>
-                      <View style={[styles.userCell, styles.userActionCell]}>
-                        <Text style={styles.userTableHeaderText}>
-                          {activeUserView === "pending" ? "Action" : "Email"}
-                        </Text>
+                        <View style={[styles.userCell, styles.userActionCell]}>
+                          <Text style={styles.userTableHeaderText}>Email</Text>
+                        </View>
                       </View>
-                    </View>
-                    {activeUserView === "active" ? (
-                      isLoadingUsers ? (
+                      {isLoadingUsers ? (
                         <View style={styles.loadingState}>
                           <ActivityIndicator size="small" color="#1E5AE0" />
                         </View>
-                      ) : activeUsers.length ? (
-                        activeUsers.map((entry) => (
+                      ) : users.length ? (
+                        users.map((entry) => (
                           <UserRow key={entry.uid} user={entry} onRowPress={() => setSelectedUser(entry)} />
                         ))
                       ) : (
                         <Text style={styles.emptyText}>No users found yet.</Text>
-                      )
-                    ) : pendingUsers.length ? (
-                      pendingUsers.map((entry) => (
-                        <UserRow
-                          key={entry.uid}
-                          user={entry}
-                          actionLabel="Review"
-                          onRowPress={() => setSelectedUser(entry)}
-                        />
-                      ))
-                    ) : (
-                      <View style={styles.pendingStateCard}>
-                        <Text style={styles.pendingStateTitle}>No approval requests yet</Text>
-                        <Text style={styles.pendingStateText}>
-                          Pending user requests will appear here once the approval flow is wired in.
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </ScrollView>
+                      )}
+                    </View>
+                  </ScrollView>
               </View>
             )}
           </View>
@@ -948,12 +810,8 @@ function AdminTabButton({
   );
 }
 
-function getUserAccessStatus(user: UserProfileRecord): UserAccessStatus {
-  return user.accessStatus ?? "active";
-}
-
 function formatUserAccessStatus(user: UserProfileRecord) {
-  return getUserAccessStatus(user) === "pending_approval" ? "Pending Approval" : "Active";
+  return "Active";
 }
 
 function UserRow({
@@ -1473,29 +1331,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  adminSettingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#223A63",
-    paddingBottom: 12,
-  },
-  adminSettingLabelWrap: {
-    flex: 1,
-    gap: 4,
-  },
-  adminSettingTitle: {
-    color: "#F7FAFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  adminSettingText: {
-    color: "#93A1BC",
-    fontSize: 13,
-    lineHeight: 18,
-  },
   userTable: {
     borderWidth: 1,
     borderColor: "#223A63",
@@ -1561,23 +1396,6 @@ const styles = StyleSheet.create({
     color: "#93A1BC",
     fontSize: 12,
     lineHeight: 17,
-  },
-  pendingStateCard: {
-    borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#0E1B36",
-    padding: 16,
-    gap: 8,
-  },
-  pendingStateTitle: {
-    color: "#F7FAFF",
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  pendingStateText: {
-    color: "#9FB0CF",
-    fontSize: 14,
-    lineHeight: 22,
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,

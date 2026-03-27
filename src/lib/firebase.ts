@@ -2,7 +2,6 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getAuth, initializeAuth, type Auth, type Persistence } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
-import { getFunctions, type Functions } from "firebase/functions";
 import { Platform } from "react-native";
 
 const firebaseEnv = {
@@ -48,7 +47,6 @@ function initializeFirebaseAuth() {
 
 let authValue: Auth | undefined;
 let dbValue: Firestore | undefined;
-let functionsValue: Functions | undefined;
 
 if (!firebaseInitializationError) {
   const firebaseConfig = {
@@ -78,19 +76,4 @@ export function getFirebaseServices() {
   }
 
   return { auth: authValue, db: dbValue, firebaseApp: firebaseAppValue };
-}
-
-export function getFirebaseFunctions() {
-  if (!firebaseAppValue) {
-    throw new Error(
-      firebaseInitializationError ??
-        "Firebase failed to initialize. Check the configured environment variables."
-    );
-  }
-
-  if (!functionsValue) {
-    functionsValue = getFunctions(firebaseAppValue, "us-central1");
-  }
-
-  return functionsValue;
 }

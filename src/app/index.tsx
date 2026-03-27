@@ -5,6 +5,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -17,22 +18,31 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { signInWithPhone, signUpWithPhone } from "@/lib/auth";
+import { validateReferralForSignup } from "@/lib/referrals";
 import { useAuth } from "@/providers/AuthProvider";
 
 type AuthMode = "login" | "signup";
 
 const signupBonus = 50000;
+const accessPhoneNumber = "918973016124";
 
 export default function HomeScreen() {
   const { error, isLoading, user } = useAuth();
   const { width } = useWindowDimensions();
   const { mode: requestedMode } = useLocalSearchParams<{ mode?: string }>();
-  const [mode, setMode] = useState<AuthMode>("signup");
+  const [mode, setMode] = useState<AuthMode>("login");
   const [displayName, setDisplayName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isValidatingReferral, setIsValidatingReferral] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [validatedReferral, setValidatedReferral] = useState<{
+    referralId: string;
+    referredName: string | null;
+    referrerDisplayName: string;
+  } | null>(null);
+  const [isReferralValidated, setIsReferralValidated] = useState(false);
   const isDesktop = width >= 1024;
 
   useEffect(() => {
@@ -40,6 +50,51 @@ export default function HomeScreen() {
       setMode(requestedMode);
     }
   }, [requestedMode]);
+
+  useEffect(() => {
+    setValidatedReferral(null);
+    setIsReferralValidated(false);
+    setDisplayName("");
+    setPassword("");
+    setSubmitError(null);
+  }, [mode]);
+
+  async function handleValidateReferral() {
+    setSubmitError(null);
+
+    if (!phoneNumber.trim()) {
+      const message = "Mobile number is required.";
+      setSubmitError(message);
+      Alert.alert("Missing details", message);
+      return;
+    }
+
+    setIsValidatingReferral(true);
+
+    try {
+      const referral = await validateReferralForSignup(phoneNumber.trim());
+      setValidatedReferral(referral);
+      setIsReferralValidated(true);
+
+      if (referral?.referredName) {
+        setDisplayName(referral.referredName);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to validate referral right now.";
+      setSubmitError(message);
+      Alert.alert("Validation failed", message);
+    } finally {
+      setIsValidatingReferral(false);
+    }
+  }
+
+  function handleContactAdmin() {
+    const normalizedPhone = phoneNumber.trim() || "Unknown";
+    const message = `Hi, I need access to FPL. My phone number is ${normalizedPhone}.`;
+    const url = `https://wa.me/${accessPhoneNumber}?text=${encodeURIComponent(message)}`;
+    void Linking.openURL(url);
+  }
 
   async function handleSubmit() {
     setSubmitError(null);
@@ -55,6 +110,13 @@ export default function HomeScreen() {
       const message = "Display name is required for sign up.";
       setSubmitError(message);
       Alert.alert("Missing details", message);
+      return;
+    }
+
+    if (mode === "signup" && !validatedReferral) {
+      const message = "Referral validation is required before sign up.";
+      setSubmitError(message);
+      Alert.alert("Referral required", message);
       return;
     }
 
@@ -94,7 +156,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color="#1E5AE0" />
-          <Text style={styles.loadingText}>Connecting Friends Premier League...</Text>
+          <Text style={styles.loadingText}>Connecting FPL...</Text>
         </View>
       </SafeAreaView>
     );
@@ -127,21 +189,8 @@ export default function HomeScreen() {
               <Text style={[styles.title, isDesktop && styles.titleDesktop]}>FPL</Text>
             </View>
 
-            <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+            <View style={styles.authContent}>
               <View style={styles.modeRow}>
-                <Pressable
-                  style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
-                  onPress={() => setMode("signup")}
-                >
-                  <Text
-                    style={[
-                      styles.modeChipText,
-                      mode === "signup" && styles.modeChipTextActive,
-                    ]}
-                  >
-                    Sign Up
-                  </Text>
-                </Pressable>
                 <Pressable
                   style={[styles.modeChip, mode === "login" && styles.modeChipActive]}
                   onPress={() => setMode("login")}
@@ -155,6 +204,19 @@ export default function HomeScreen() {
                     Login
                   </Text>
                 </Pressable>
+                <Pressable
+                  style={[styles.modeChip, mode === "signup" && styles.modeChipActive]}
+                  onPress={() => setMode("signup")}
+                >
+                  <Text
+                    style={[
+                      styles.modeChipText,
+                      mode === "signup" && styles.modeChipTextActive,
+                    ]}
+                  >
+                    Sign Up
+                  </Text>
+                </Pressable>
               </View>
 
               <Text style={styles.label}>
@@ -163,39 +225,127 @@ export default function HomeScreen() {
 
               {mode === "signup" ? (
                 <>
+                  {validatedReferral ? (
+                    <>
+                      <Text style={styles.fieldLabel}>Name</Text>
+                      <TextInput
+                        placeholder="Display name"
+                        placeholderTextColor="#4C5D7C"
+                        style={styles.input}
+                        autoCapitalize="words"
+                        value={displayName}
+                        onChangeText={setDisplayName}
+                      />
+
+                      <Text style={styles.fieldLabel}>Number</Text>
+                      <TextInput
+                        placeholder="Mobile number"
+                        placeholderTextColor="#4C5D7C"
+                        style={styles.input}
+                        keyboardType="phone-pad"
+                        value={phoneNumber}
+                        editable={false}
+                      />
+
+                      <Text style={styles.fieldLabel}>Password</Text>
+                      <TextInput
+                        placeholder="Password"
+                        placeholderTextColor="#4C5D7C"
+                        style={styles.input}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        value={password}
+                        onChangeText={setPassword}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <TextInput
+                        placeholder="Mobile number"
+                        placeholderTextColor="#4C5D7C"
+                        style={styles.input}
+                        keyboardType="phone-pad"
+                        value={phoneNumber}
+                        onChangeText={(value) => {
+                          setPhoneNumber(value.replace(/[^0-9]/g, ""));
+                          setValidatedReferral(null);
+                          setIsReferralValidated(false);
+                          setDisplayName("");
+                          setPassword("");
+                          setSubmitError(null);
+                        }}
+                      />
+
+                      <Pressable
+                        style={[
+                          styles.button,
+                          (isValidatingReferral || isSubmitting) && styles.buttonDisabled,
+                        ]}
+                        onPress={handleValidateReferral}
+                        disabled={isValidatingReferral || isSubmitting}
+                      >
+                        <Text style={styles.buttonText}>
+                          {isValidatingReferral ? "Validating..." : "Validate"}
+                        </Text>
+                      </Pressable>
+                    </>
+                  )}
+
+                  {isReferralValidated && validatedReferral ? (
+                    <View style={styles.successCard}>
+                      <Text style={styles.successTitle}>Referral verified</Text>
+                      <Text style={styles.successText}>
+                        {validatedReferral.referrerDisplayName} has referred this number.
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {isReferralValidated && !validatedReferral ? (
+                    <View style={styles.errorCard}>
+                      <Text style={styles.errorText}>
+                        No referral found for this number. Contact admin to get access credentials.
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {!validatedReferral && isReferralValidated ? (
+                    <Pressable
+                      style={[styles.secondaryActionButton, isSubmitting && styles.buttonDisabled]}
+                      onPress={handleContactAdmin}
+                      disabled={isSubmitting}
+                    >
+                      <Text style={styles.secondaryActionButtonText}>Connect To Admin</Text>
+                    </Pressable>
+                  ) : null}
+                </>
+              ) : (
+                <>
                   <TextInput
-                    placeholder="Display name"
+                    placeholder="Mobile number"
                     placeholderTextColor="#4C5D7C"
                     style={styles.input}
-                    autoCapitalize="words"
-                    value={displayName}
-                    onChangeText={setDisplayName}
+                    keyboardType="phone-pad"
+                    value={phoneNumber}
+                    onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
+                  />
+
+                  <TextInput
+                    placeholder="Password"
+                    placeholderTextColor="#4C5D7C"
+                    style={styles.input}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    value={password}
+                    onChangeText={setPassword}
                   />
                 </>
-              ) : null}
-
-              <TextInput
-                placeholder="Mobile number"
-                placeholderTextColor="#4C5D7C"
-                style={styles.input}
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={(value) => setPhoneNumber(value.replace(/[^0-9]/g, ""))}
-              />
-
-              <TextInput
-                placeholder="Password"
-                placeholderTextColor="#4C5D7C"
-                style={styles.input}
-                secureTextEntry
-                autoCapitalize="none"
-                value={password}
-                onChangeText={setPassword}
-              />
+              )}
 
               <Text style={styles.helperText}>
                 {mode === "signup"
-                  ? `New users receive ${signupBonus.toLocaleString("en-IN")} coins instantly.`
+                  ? validatedReferral
+                    ? `Referred users receive ${signupBonus.toLocaleString("en-IN")} coins instantly.`
+                    : "Enter your mobile number and validate referral access before creating an account."
                   : "Use the mobile number and password you registered with."}
               </Text>
 
@@ -211,19 +361,21 @@ export default function HomeScreen() {
                 </View>
               ) : null}
 
-              <Pressable
-                style={[styles.button, isSubmitting && styles.buttonDisabled]}
-                onPress={handleSubmit}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.buttonText}>
-                  {isSubmitting
-                    ? "Please wait..."
-                    : mode === "signup"
-                      ? "Create Account"
-                      : "Login"}
-                </Text>
-              </Pressable>
+              {mode === "login" || validatedReferral ? (
+                <Pressable
+                  style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                  onPress={handleSubmit}
+                  disabled={isSubmitting}
+                >
+                  <Text style={styles.buttonText}>
+                    {isSubmitting
+                      ? "Please wait..."
+                      : mode === "signup"
+                        ? "Create Account"
+                        : "Login"}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </ScrollView>
@@ -316,17 +468,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 26,
   },
-  card: {
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: "rgba(109, 138, 196, 0.25)",
-    backgroundColor: "rgba(7, 21, 46, 0.72)",
-    paddingHorizontal: 26,
-    paddingVertical: 30,
-  },
-  cardDesktop: {
-    paddingHorizontal: 24,
-    paddingVertical: 26,
+  authContent: {
+    paddingHorizontal: 2,
   },
   modeRow: {
     flexDirection: "row",
@@ -362,6 +505,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 16,
   },
+  fieldLabel: {
+    color: "#94A4C0",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 2,
+  },
   input: {
     borderRadius: 18,
     borderWidth: 1,
@@ -394,6 +545,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
+  successCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2B7B57",
+    backgroundColor: "#123325",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 20,
+    gap: 4,
+  },
+  successTitle: {
+    color: "#DDF7E7",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  successText: {
+    color: "#BEEFD5",
+    fontSize: 14,
+    lineHeight: 20,
+  },
   button: {
     height: 64,
     borderRadius: 18,
@@ -414,6 +585,21 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     letterSpacing: 0.4,
+  },
+  secondaryActionButton: {
+    height: 64,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#2F4770",
+    backgroundColor: "#132445",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  secondaryActionButtonText: {
+    color: "#DDE5F7",
+    fontSize: 18,
+    fontWeight: "700",
   },
 });
 
