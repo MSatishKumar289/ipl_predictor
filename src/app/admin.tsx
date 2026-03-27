@@ -23,8 +23,11 @@ import { CloseIcon } from "@/components/CloseIcon";
 import {
   createMatch,
   formatMatchDate,
+  revertMatchSettlement,
   settleMatchOutcome,
+  subscribeToSettlementBackupAvailability,
   subscribeToMatches,
+  type SettlementBackupAvailability,
   updateMatchSettings,
 } from "@/lib/matches";
 import { deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
@@ -39,16 +42,21 @@ type PendingSettlement = {
   matchLabel: string;
   outcomeLabel: string;
 } | null;
+type PendingRevert = {
+  matchId: string;
+  matchLabel: string;
+} | null;
 
 type PickerMode = "date" | "time" | null;
 type AdminMatchView = "live" | "results";
-type AdminSection = "matches" | "users";
+type AdminSection = "users" | "create_match" | "manage_match";
 
 export default function AdminScreen() {
   const router = useRouter();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const { width } = useWindowDimensions();
   const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [backupAvailability, setBackupAvailability] = useState<SettlementBackupAvailability>({});
   const [users, setUsers] = useState<UserProfileRecord[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
@@ -63,6 +71,8 @@ export default function AdminScreen() {
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
   const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
   const [isSettling, setIsSettling] = useState(false);
+  const [pendingRevert, setPendingRevert] = useState<PendingRevert>(null);
+  const [isReverting, setIsReverting] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>("users");
   const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
   const [pendingUserActionId, setPendingUserActionId] = useState<string | null>(null);
@@ -75,6 +85,19 @@ export default function AdminScreen() {
       setMatches(nextMatches);
       setIsLoadingMatches(false);
     });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSettlementBackupAvailability(
+      (nextAvailability) => {
+        setBackupAvailability(nextAvailability);
+      },
+      () => {
+        setBackupAvailability({});
+      }
+    );
 
     return unsubscribe;
   }, []);
@@ -252,6 +275,25 @@ export default function AdminScreen() {
     }
   }
 
+  async function confirmRevertSettlement() {
+    if (!pendingRevert || isReverting) {
+      return;
+    }
+
+    try {
+      setIsReverting(true);
+      await revertMatchSettlement(pendingRevert.matchId, adminUserId);
+      setPendingRevert(null);
+      Alert.alert("Settlement reverted", "The match result and related records were restored.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to revert the match settlement.";
+      Alert.alert("Revert failed", message);
+    } finally {
+      setIsReverting(false);
+    }
+  }
+
   async function handleDeleteUserRecords(targetUserId: string) {
     if (pendingUserActionId) {
       return;
@@ -326,6 +368,40 @@ export default function AdminScreen() {
           style={[styles.confirmSecondaryButton, isSettling && styles.buttonDisabled]}
           onPress={() => setPendingSettlement(null)}
           disabled={isSettling}
+        >
+          <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
+  const revertDialog = pendingRevert ? (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setPendingRevert(null)} />
+      <View style={styles.confirmCard}>
+        <Text style={styles.confirmTitle}>Revert Settlement</Text>
+        <Text style={styles.confirmText}>
+          Restore {pendingRevert.matchLabel} to its pre-settlement state?
+        </Text>
+        <Text style={styles.confirmHint}>
+          This will restore users, predictions, referrals, and remove settlement-generated wallet
+          transactions for that match.
+        </Text>
+
+        <Pressable
+          style={[styles.confirmDangerButton, isReverting && styles.buttonDisabled]}
+          onPress={confirmRevertSettlement}
+          disabled={isReverting}
+        >
+          {isReverting ? (
+            <ActivityIndicator size="small" color="#F7FAFF" />
+          ) : (
+            <Text style={styles.confirmPrimaryButtonText}>Confirm Revert</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={[styles.confirmSecondaryButton, isReverting && styles.buttonDisabled]}
+          onPress={() => setPendingRevert(null)}
+          disabled={isReverting}
         >
           <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
         </Pressable>
@@ -439,20 +515,24 @@ export default function AdminScreen() {
 
             <View style={styles.sectionTabs}>
               <AdminTabButton
-                label="Users List"
+                label="Users"
                 active={activeSection === "users"}
                 onPress={() => setActiveSection("users")}
               />
               <AdminTabButton
-                label="Create Match"
-                active={activeSection === "matches"}
-                onPress={() => setActiveSection("matches")}
+                label="+ Match"
+                active={activeSection === "create_match"}
+                onPress={() => setActiveSection("create_match")}
+              />
+              <AdminTabButton
+                label="Manage Match"
+                active={activeSection === "manage_match"}
+                onPress={() => setActiveSection("manage_match")}
               />
             </View>
 
-            {activeSection === "matches" ? (
-              <>
-                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+            {activeSection === "create_match" ? (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Create Match</Text>
                   <TextInput
                     style={styles.input}
@@ -572,7 +652,7 @@ export default function AdminScreen() {
                     </Text>
                   </Pressable>
                 </View>
-
+              ) : activeSection === "manage_match" ? (
                 <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Manage Matches</Text>
                   <View style={styles.viewTabs}>
@@ -599,6 +679,8 @@ export default function AdminScreen() {
                         match.status === "settled" ||
                         match.status === "no_result" ||
                         match.status === "completed";
+                      const backupInfo = backupAvailability[match.id];
+                      const hasBackup = !!backupInfo?.hasBackup;
 
                       return (
                         <View key={match.id} style={styles.matchRow}>
@@ -660,9 +742,32 @@ export default function AdminScreen() {
                           </View>
 
                           {settlementLocked ? (
-                            <Text style={styles.lockedActionsText}>
-                              Result already recorded. Settlement actions are disabled.
-                            </Text>
+                            <View style={styles.lockedActionsWrap}>
+                              <Text style={styles.lockedActionsText}>
+                                {hasBackup
+                                  ? "Result already recorded. Backup available for revert."
+                                  : "Result already recorded. No backup available for revert."}
+                              </Text>
+                              {hasBackup ? (
+                                <Pressable
+                                  style={[
+                                    styles.revertButton,
+                                    isReverting && styles.actionButtonDisabled,
+                                  ]}
+                                  onPress={() =>
+                                    setPendingRevert({
+                                      matchId: match.id,
+                                      matchLabel: `${match.teamAShort} vs ${match.teamBShort}`,
+                                    })
+                                  }
+                                  disabled={isReverting}
+                                >
+                                  <Text style={styles.revertButtonText}>Revert Settlement</Text>
+                                </Pressable>
+                              ) : (
+                                <Text style={styles.noBackupText}>No backup found for this match.</Text>
+                              )}
+                            </View>
                           ) : null}
                         </View>
                       );
@@ -675,7 +780,6 @@ export default function AdminScreen() {
                     </Text>
                   )}
                 </View>
-              </>
               ) : (
                 <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Users List</Text>
@@ -724,6 +828,7 @@ export default function AdminScreen() {
       {Platform.OS === "web" ? (
         <>
           {settlementDialog}
+          {revertDialog}
           {userDialog}
         </>
       ) : (
@@ -735,6 +840,14 @@ export default function AdminScreen() {
             onRequestClose={() => setPendingSettlement(null)}
           >
             {settlementDialog}
+          </Modal>
+          <Modal
+            visible={!!pendingRevert}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPendingRevert(null)}
+          >
+            {revertDialog}
           </Modal>
           <Modal
             visible={!!selectedUser}
@@ -1292,6 +1405,29 @@ const styles = StyleSheet.create({
     color: "#F9B17A",
     fontSize: 13,
     lineHeight: 20,
+  },
+  lockedActionsWrap: {
+    gap: 10,
+  },
+  revertButton: {
+    alignSelf: "flex-start",
+    minWidth: 136,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8D2F2F",
+    paddingHorizontal: 14,
+  },
+  revertButtonText: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  noBackupText: {
+    color: "#93A1BC",
+    fontSize: 13,
+    lineHeight: 18,
   },
   blockedCard: {
     margin: 24,
