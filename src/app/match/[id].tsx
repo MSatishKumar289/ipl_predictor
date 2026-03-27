@@ -354,16 +354,18 @@ export default function MatchDetailScreen() {
 
             {!showCompletedPublicView ? (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>Your Prediction</Text>
-                <View style={styles.balanceTextRow}>
-                  <Text style={styles.balanceText}>Balance:</Text>
-                  <CoinAmount
-                    value={(profile?.balance ?? 0).toLocaleString("en-IN")}
-                    color="#9FB0CF"
-                    size={15}
-                    weight="700"
-                    iconSize={12}
-                  />
+                <View style={styles.predictionHeaderRow}>
+                  <Text style={styles.cardTitle}>Your Prediction</Text>
+                  <View style={styles.balanceTextRow}>
+                    <Text style={styles.balanceText}>Balance:</Text>
+                    <CoinAmount
+                      value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+                      color="#9FB0CF"
+                      size={14}
+                      weight="700"
+                      iconSize={11}
+                    />
+                  </View>
                 </View>
                 {predictionError ? (
                   <View style={styles.inlineError}>
@@ -725,7 +727,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 24,
+    padding: 18,
     paddingTop: 48,
     gap: 18,
   },
@@ -851,31 +853,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",
-    padding: 20,
-    gap: 14,
+    padding: 16,
+    gap: 10,
+  },
+  predictionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
   cardTitle: {
     color: "#F7FAFF",
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "700",
   },
   balanceText: {
     color: "#9FB0CF",
-    fontSize: 15,
+    fontSize: 14,
   },
   balanceTextRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   selectionRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   selectionButton: {
     flex: 1,
-    height: 54,
-    borderRadius: 16,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#334C76",
     backgroundColor: "#0E1B36",
@@ -888,45 +896,45 @@ const styles = StyleSheet.create({
   },
   selectionText: {
     color: "#A6B4D1",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
   },
   selectionTextActive: {
     color: "#F7FAFF",
   },
   input: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#334C76",
     backgroundColor: "#162645",
-    paddingHorizontal: 16,
-    height: 56,
+    paddingHorizontal: 14,
+    height: 50,
     color: "#F7FAFF",
-    fontSize: 16,
+    fontSize: 15,
   },
   inputDisabled: {
     opacity: 0.65,
   },
   statusTextInline: {
     color: "#9FB0CF",
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   primaryButton: {
-    height: 56,
-    borderRadius: 16,
+    height: 50,
+    borderRadius: 14,
     backgroundColor: "#1E5AE0",
     alignItems: "center",
     justifyContent: "center",
   },
   primaryButtonText: {
     color: "#F7FAFF",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
   },
   deleteButton: {
-    height: 52,
-    borderRadius: 16,
+    height: 46,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#7A2A2A",
     backgroundColor: "#311515",
@@ -935,7 +943,7 @@ const styles = StyleSheet.create({
   },
   deleteButtonText: {
     color: "#FFD7D7",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   deleteConfirmCard: {
@@ -975,8 +983,8 @@ const styles = StyleSheet.create({
   },
   lockedText: {
     color: "#F9B17A",
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   publicRow: {
     flexDirection: "row",

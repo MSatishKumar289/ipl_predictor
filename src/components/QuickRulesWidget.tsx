@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Modal,
   Pressable,
@@ -7,12 +8,15 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { router } from "expo-router";
 
 import { QuestionIcon } from "@/components/QuestionIcon";
 
 type QuickRulesWidgetProps = {
   enabled: boolean;
   autoOpen: boolean;
+  userId?: string;
+  variant?: "help" | "admin";
 };
 
 const quickSteps = [
@@ -23,11 +27,18 @@ const quickSteps = [
   "Win your pick and grow your balance.",
 ];
 
-export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
+export function QuickRulesWidget({
+  enabled,
+  autoOpen,
+  userId,
+  variant = "help",
+}: QuickRulesWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const hasAutoOpenedRef = useRef(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
+  const isAdmin = variant === "admin";
+  const quickRulesSeenKey = userId ? `quick_rules_seen_${userId}` : null;
 
   useEffect(() => {
     if (!enabled) {
@@ -36,14 +47,51 @@ export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
       return;
     }
 
-    if (autoOpen && !hasAutoOpenedRef.current) {
+    if (isAdmin || !autoOpen || !quickRulesSeenKey || hasAutoOpenedRef.current) {
+      return;
+    }
+
+    let isActive = true;
+
+    void AsyncStorage.getItem(quickRulesSeenKey).then((value) => {
+      if (!isActive || value === "true") {
+        return;
+      }
+
       setIsOpen(true);
       hasAutoOpenedRef.current = true;
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [autoOpen, enabled, isAdmin, quickRulesSeenKey]);
+
+  useEffect(() => {
+    hasAutoOpenedRef.current = false;
+  }, [quickRulesSeenKey]);
+
+  async function handleClose() {
+    setIsOpen(false);
+
+    if (quickRulesSeenKey) {
+      await AsyncStorage.setItem(quickRulesSeenKey, "true");
     }
-  }, [autoOpen, enabled]);
+  }
 
   if (!enabled) {
     return null;
+  }
+
+  if (isAdmin) {
+    return (
+      <Pressable
+        style={[styles.fab, styles.adminFab, isDesktop ? styles.fabDesktop : null]}
+        onPress={() => router.push("/admin")}
+      >
+        <Text style={styles.adminFabText}>AD</Text>
+      </Pressable>
+    );
   }
 
   return (
@@ -52,9 +100,9 @@ export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
         <QuestionIcon />
       </Pressable>
 
-      <Modal animationType="fade" transparent visible={isOpen} onRequestClose={() => setIsOpen(false)}>
+      <Modal animationType="fade" transparent visible={isOpen} onRequestClose={() => void handleClose()}>
         <View style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} />
+          <Pressable style={styles.backdrop} onPress={() => void handleClose()} />
           <View style={[styles.card, isDesktop ? styles.cardDesktop : null]}>
             <View style={styles.handle} />
             <Text style={styles.title}>Get Started with FPL</Text>
@@ -69,7 +117,7 @@ export function QuickRulesWidget({ enabled, autoOpen }: QuickRulesWidgetProps) {
               ))}
             </View>
 
-            <Pressable style={styles.closeButton} onPress={() => setIsOpen(false)}>
+            <Pressable style={styles.closeButton} onPress={() => void handleClose()}>
               <Text style={styles.closeButtonText}>Close</Text>
             </Pressable>
           </View>
@@ -99,9 +147,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
+  adminFab: {
+    backgroundColor: "rgba(26, 78, 168, 0.86)",
+    borderColor: "rgba(113, 164, 255, 0.8)",
+  },
   fabDesktop: {
     right: 28,
     bottom: 34,
+  },
+  adminFabText: {
+    color: "#F6FAFF",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.8,
   },
   overlay: {
     flex: 1,

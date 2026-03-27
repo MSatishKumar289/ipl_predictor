@@ -1,7 +1,8 @@
-import { Redirect, Stack, usePathname } from "expo-router";
+import { Redirect, Stack, router, usePathname } from "expo-router";
 
 import { RouteFallbackScreen } from "@/components/RouteFallbackScreen";
 import { QuickRulesWidget } from "@/components/QuickRulesWidget";
+import { logout } from "@/lib/auth";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -18,11 +19,14 @@ export default function RootLayout() {
 }
 
 function AuthGate() {
-  const { isLoading, user } = useAuth();
+  const { isLoading, user, profile, error } = useAuth();
   const pathname = usePathname();
   const isRootAuthScreen = pathname === authRoute;
   const isPublicRoute = publicRoutes.has(pathname);
-  const shouldShowQuickRules = !isLoading && !!user && !isPublicRoute;
+  const isAdminRoute = pathname === "/admin";
+  const shouldShowQuickRules = !isLoading && !!user && !isPublicRoute && profile?.role !== "admin";
+  const shouldShowAdminFab =
+    !isLoading && !!user && !isPublicRoute && !isAdminRoute && profile?.role === "admin";
 
   if (!isLoading && !user && !isPublicRoute) {
     return (
@@ -35,7 +39,23 @@ function AuthGate() {
     );
   }
 
-  if (!isLoading && user && isRootAuthScreen) {
+  if (!isLoading && !!user && !profile && !!error && pathname !== "/logout") {
+    return (
+      <RouteFallbackScreen
+        eyebrow="Profile Required"
+        title="Profile Unavailable"
+        description="Your account profile could not be loaded yet. Log out and try again after refreshing the app."
+        primaryActionLabel="Back To Login"
+        onPrimaryAction={() => {
+          void logout().finally(() => {
+            router.replace("/");
+          });
+        }}
+      />
+    );
+  }
+
+  if (!isLoading && user && profile && isRootAuthScreen) {
     return <Redirect href={authenticatedRoute} />;
   }
 
@@ -47,7 +67,12 @@ function AuthGate() {
           contentStyle: { backgroundColor: "#0A1325" },
         }}
       />
-      <QuickRulesWidget enabled={shouldShowQuickRules} autoOpen={shouldShowQuickRules} />
+      <QuickRulesWidget
+        enabled={shouldShowQuickRules}
+        autoOpen={shouldShowQuickRules}
+        userId={user?.uid}
+      />
+      <QuickRulesWidget enabled={shouldShowAdminFab} autoOpen={false} variant="admin" />
     </>
   );
 }

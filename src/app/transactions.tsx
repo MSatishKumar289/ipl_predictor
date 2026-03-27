@@ -174,18 +174,16 @@ export default function TransactionsScreen() {
               <SummaryCard label="Credits" value={String(totals.credits)} accent />
               <SummaryCard label="Debits" value={String(totals.debits)} />
             </View>
-            <SummaryCard
-              label="Balance"
-              value={
-                <CoinAmount
-                  value={(profile?.balance ?? 0).toLocaleString("en-IN")}
-                  size={20}
-                  weight="800"
-                  iconSize={15}
-                />
-              }
-              fullWidth
-            />
+            <View style={styles.balanceCard}>
+              <Text style={styles.balanceLabel}>Balance</Text>
+              <CoinAmount
+                value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+                size={20}
+                weight="800"
+                iconSize={15}
+                style={styles.balanceAmountRow}
+              />
+            </View>
           </View>
 
           <View style={styles.tableWrap}>
@@ -454,7 +452,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 24,
+    padding: 18,
     paddingTop: 36,
     paddingBottom: 40,
   },
@@ -531,6 +529,26 @@ const styles = StyleSheet.create({
   summaryCardFullWidth: {
     flex: 0,
     width: "100%",
+  },
+  balanceCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#102042",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  balanceLabel: {
+    color: "#9FB0CF",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  balanceAmountRow: {
+    minHeight: 28,
+    alignSelf: "flex-start",
   },
   summaryCardAccent: {
     borderColor: "#2A7D56",

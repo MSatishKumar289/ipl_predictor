@@ -10,7 +10,6 @@ import { useAuth } from "@/providers/AuthProvider";
 export default function ProfileTab() {
   const { profile, error } = useAuth();
   const { width } = useWindowDimensions();
-  const adminRoute = "/admin" as Href;
   const logoutRoute = "/logout" as Href;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDesktop = width >= 1024;
@@ -90,13 +89,6 @@ export default function ProfileTab() {
               value={profile?.role === "admin" ? "Admin access enabled" : "Standard player"}
             />
           </View>
-
-          {profile?.role === "admin" ? (
-            <Pressable style={styles.adminButton} onPress={() => router.push(adminRoute)}>
-              <Text style={styles.adminButtonText}>Open Admin Panel</Text>
-            </Pressable>
-          ) : null}
-
           <Pressable style={styles.logoutButton} onPress={() => router.push(logoutRoute)}>
             <Text style={styles.logoutButtonText}>Sign Out</Text>
           </Pressable>
@@ -162,7 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 24,
+    padding: 18,
     paddingTop: 36,
     paddingBottom: 40,
     gap: 18,
@@ -376,18 +368,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     textAlign: "right",
-  },
-  adminButton: {
-    height: 56,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#123E8F",
-  },
-  adminButtonText: {
-    color: "#F7FAFF",
-    fontSize: 16,
-    fontWeight: "800",
   },
   logoutButton: {
     height: 56,

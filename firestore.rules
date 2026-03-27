@@ -28,7 +28,7 @@ service cloud.firestore {
       allow update: if signedIn() &&
         (request.auth.uid == userId || isAdmin()) &&
         (isKeepingSameDisplayName() || hasValidDisplayName());
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /matches/{matchId} {
@@ -44,7 +44,7 @@ service cloud.firestore {
     }
 
     match /referrals/{referralId} {
-      allow read: if signedIn();
+      allow get: if true;
       allow list: if signedIn();
       allow create: if signedIn() &&
         request.resource.data.referrerUserId == request.auth.uid &&
@@ -56,13 +56,23 @@ service cloud.firestore {
           resource.data.referrerUserId == request.auth.uid ||
           request.resource.data.referredUserId == request.auth.uid
         );
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /transactions/{transactionId} {
       allow read: if signedIn();
       allow create: if signedIn() || isAdmin();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
+
+    match /settlement_snapshots/{snapshotId} {
+      allow read, create, update, delete: if isAdmin();
+
+      match /{document=**} {
+        allow read, create, update, delete: if isAdmin();
+      }
+    }
+
   }
 }

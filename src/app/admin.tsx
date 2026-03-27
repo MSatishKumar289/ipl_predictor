@@ -19,15 +19,21 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
+import { CloseIcon } from "@/components/CloseIcon";
 import {
   createMatch,
   formatMatchDate,
+  revertMatchSettlement,
   settleMatchOutcome,
+  subscribeToSettlementBackupAvailability,
   subscribeToMatches,
+  type SettlementBackupAvailability,
   updateMatchSettings,
 } from "@/lib/matches";
+import { deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
 import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/ipl-teams";
 import type { MatchRecord } from "@/lib/match-types";
+import type { UserProfileRecord } from "@/lib/auth-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type PendingSettlement = {
@@ -36,16 +42,24 @@ type PendingSettlement = {
   matchLabel: string;
   outcomeLabel: string;
 } | null;
+type PendingRevert = {
+  matchId: string;
+  matchLabel: string;
+} | null;
 
 type PickerMode = "date" | "time" | null;
 type AdminMatchView = "live" | "results";
+type AdminSection = "users" | "create_match" | "manage_match";
 
 export default function AdminScreen() {
   const router = useRouter();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const { width } = useWindowDimensions();
   const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [backupAvailability, setBackupAvailability] = useState<SettlementBackupAvailability>({});
+  const [users, setUsers] = useState<UserProfileRecord[]>([]);
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [matchNumber, setMatchNumber] = useState("");
   const [teamAId, setTeamAId] = useState<IplTeamId | null>(null);
@@ -57,7 +71,12 @@ export default function AdminScreen() {
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
   const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
   const [isSettling, setIsSettling] = useState(false);
+  const [pendingRevert, setPendingRevert] = useState<PendingRevert>(null);
+  const [isReverting, setIsReverting] = useState(false);
+  const [activeSection, setActiveSection] = useState<AdminSection>("users");
   const [activeMatchView, setActiveMatchView] = useState<AdminMatchView>("live");
+  const [pendingUserActionId, setPendingUserActionId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfileRecord | null>(null);
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
 
@@ -66,6 +85,34 @@ export default function AdminScreen() {
       setMatches(nextMatches);
       setIsLoadingMatches(false);
     });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToSettlementBackupAvailability(
+      (nextAvailability) => {
+        setBackupAvailability(nextAvailability);
+      },
+      () => {
+        setBackupAvailability({});
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAllUsers(
+      (nextUsers) => {
+        setUsers(nextUsers);
+        setIsLoadingUsers(false);
+      },
+      () => {
+        setUsers([]);
+        setIsLoadingUsers(false);
+      }
+    );
 
     return unsubscribe;
   }, []);
@@ -228,6 +275,44 @@ export default function AdminScreen() {
     }
   }
 
+  async function confirmRevertSettlement() {
+    if (!pendingRevert || isReverting) {
+      return;
+    }
+
+    try {
+      setIsReverting(true);
+      await revertMatchSettlement(pendingRevert.matchId, adminUserId);
+      setPendingRevert(null);
+      Alert.alert("Settlement reverted", "The match result and related records were restored.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to revert the match settlement.";
+      Alert.alert("Revert failed", message);
+    } finally {
+      setIsReverting(false);
+    }
+  }
+
+  async function handleDeleteUserRecords(targetUserId: string) {
+    if (pendingUserActionId) {
+      return;
+    }
+
+    try {
+      setPendingUserActionId(targetUserId);
+      await deleteUserRecords(targetUserId);
+      setSelectedUser(null);
+      Alert.alert("Records deleted", "The user's Firestore records have been removed.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to delete the user's records.";
+      Alert.alert("Delete failed", message);
+    } finally {
+      setPendingUserActionId(null);
+    }
+  }
+
   function openPicker(mode: Exclude<PickerMode, null>) {
     const seed = buildPickerSeed(matchDate, matchTime);
     setPickerValue(seed);
@@ -289,6 +374,110 @@ export default function AdminScreen() {
       </View>
     </View>
   ) : null;
+  const revertDialog = pendingRevert ? (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setPendingRevert(null)} />
+      <View style={styles.confirmCard}>
+        <Text style={styles.confirmTitle}>Revert Settlement</Text>
+        <Text style={styles.confirmText}>
+          Restore {pendingRevert.matchLabel} to its pre-settlement state?
+        </Text>
+        <Text style={styles.confirmHint}>
+          This will restore users, predictions, referrals, and remove settlement-generated wallet
+          transactions for that match.
+        </Text>
+
+        <Pressable
+          style={[styles.confirmDangerButton, isReverting && styles.buttonDisabled]}
+          onPress={confirmRevertSettlement}
+          disabled={isReverting}
+        >
+          {isReverting ? (
+            <ActivityIndicator size="small" color="#F7FAFF" />
+          ) : (
+            <Text style={styles.confirmPrimaryButtonText}>Confirm Revert</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={[styles.confirmSecondaryButton, isReverting && styles.buttonDisabled]}
+          onPress={() => setPendingRevert(null)}
+          disabled={isReverting}
+        >
+          <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
+  const userDialog = selectedUser ? (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setSelectedUser(null)} />
+      <View style={styles.confirmCard}>
+        <View style={styles.modalHeader}>
+            <View style={styles.modalHeaderTextWrap}>
+              <Text style={styles.confirmTitle}>User Details</Text>
+              <Text style={styles.confirmText}>{selectedUser.displayName}</Text>
+            </View>
+          <Pressable style={styles.modalCloseButton} onPress={() => setSelectedUser(null)}>
+            <CloseIcon />
+          </Pressable>
+        </View>
+        <ScrollView
+          style={styles.modalBodyScroll}
+          contentContainerStyle={styles.modalBodyContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.detailGrid}>
+            <DetailRow label="Phone" value={selectedUser.phoneNumber || "-"} />
+            <DetailRow label="Email" value={selectedUser.email || "-"} />
+            <DetailRow label="Role" value={selectedUser.role === "admin" ? "Admin" : "User"} />
+            <DetailRow label="Status" value={formatUserAccessStatus(selectedUser)} />
+            <DetailRow
+              label="Coins"
+              value={selectedUser.balance.toLocaleString("en-IN")}
+            />
+            <DetailRow label="Points" value={selectedUser.points.toLocaleString("en-IN")} />
+            <DetailRow label="Wins" value={String(selectedUser.wins)} />
+            <DetailRow label="Losses" value={String(selectedUser.losses)} />
+            <DetailRow
+              label="Total Predictions"
+              value={selectedUser.totalPredictions.toLocaleString("en-IN")}
+            />
+            <DetailRow
+              label="Login Method"
+              value={selectedUser.loginMethod === "phone" ? "Phone" : "Email"}
+            />
+            <DetailRow
+              label="Referred By"
+              value={selectedUser.referredByDisplayName || "-"}
+            />
+            <DetailRow label="Referral Id" value={selectedUser.referralId || "-"} />
+          </View>
+          <Text style={styles.confirmHint}>
+            This deletes app records only. Firebase Auth will remain until you remove it manually.
+          </Text>
+
+          <Pressable
+            style={[styles.confirmDangerButton, pendingUserActionId && styles.buttonDisabled]}
+            onPress={() => handleDeleteUserRecords(selectedUser.uid)}
+            disabled={!!pendingUserActionId}
+          >
+            {pendingUserActionId === selectedUser.uid ? (
+              <ActivityIndicator size="small" color="#F7FAFF" />
+            ) : (
+              <Text style={styles.confirmPrimaryButtonText}>Delete User Records</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.confirmSecondaryButton, pendingUserActionId && styles.buttonDisabled]}
+            onPress={() => setSelectedUser(null)}
+            disabled={!!pendingUserActionId}
+          >
+            <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    </View>
+  ) : null;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -319,264 +508,356 @@ export default function AdminScreen() {
               <View style={styles.headerTextWrap}>
                 <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
                 <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
-                  Create fixtures and update the final result.
+                  Manage fixtures and player access from one place.
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-              <Text style={styles.cardTitle}>Create Match</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Match number"
-                placeholderTextColor="#4C5D7C"
-                keyboardType="number-pad"
-                value={matchNumber}
-                onChangeText={(value) => setMatchNumber(value.replace(/[^0-9]/g, ""))}
+            <View style={styles.sectionTabs}>
+              <AdminTabButton
+                label="Users"
+                active={activeSection === "users"}
+                onPress={() => setActiveSection("users")}
               />
-              <View style={styles.selectorSection}>
-                <Text style={styles.selectorLabel}>Team A</Text>
-                <View style={styles.teamGrid}>
-                  {IPL_TEAMS.map((team) => (
-                    <TeamOptionCard
-                      key={`team-a-${team.id}`}
-                      team={team}
-                      isSelected={teamAId === team.id}
-                      isDisabled={teamBId === team.id}
-                      onPress={() => setTeamAId(team.id)}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.selectorSection}>
-                <Text style={styles.selectorLabel}>Team B</Text>
-                <View style={styles.teamGrid}>
-                  {IPL_TEAMS.map((team) => (
-                    <TeamOptionCard
-                      key={`team-b-${team.id}`}
-                      team={team}
-                      isSelected={teamBId === team.id}
-                      isDisabled={teamAId === team.id}
-                      onPress={() => setTeamBId(team.id)}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.selectionSummaryCard}>
-                <Text style={styles.selectionSummaryTitle}>Selected Teams</Text>
-                <Text style={styles.selectionSummaryText}>
-                  {selectedTeamA ? `${selectedTeamA.name} (${selectedTeamA.shortCode})` : "Choose Team A"}
-                </Text>
-                <Text style={styles.selectionSummaryText}>
-                  {selectedTeamB ? `${selectedTeamB.name} (${selectedTeamB.shortCode})` : "Choose Team B"}
-                </Text>
-              </View>
-
-              {createMatchError ? (
-                <View style={styles.formMessageError}>
-                  <Text style={styles.formMessageErrorText}>{createMatchError}</Text>
-                </View>
-              ) : null}
-
-              {createMatchSuccess ? (
-                <View style={styles.formMessageSuccess}>
-                  <Text style={styles.formMessageSuccessText}>{createMatchSuccess}</Text>
-                </View>
-              ) : null}
-              {Platform.OS === "web" ? (
-                <>
-                  <WebDateTimeInput
-                    type="date"
-                    value={matchDate}
-                    onChange={setMatchDate}
-                    placeholder="Match date"
-                  />
-                  <WebDateTimeInput
-                    type="time"
-                    value={matchTime}
-                    onChange={setMatchTime}
-                    placeholder="Match time"
-                  />
-                </>
-              ) : (
-                <>
-                  <Pressable style={styles.inputButton} onPress={() => openPicker("date")}>
-                    <Text style={[styles.inputButtonText, !matchDate && styles.placeholderText]}>
-                      {matchDate || "Select match date"}
-                    </Text>
-                  </Pressable>
-                  <Pressable style={styles.inputButton} onPress={() => openPicker("time")}>
-                    <Text style={[styles.inputButtonText, !matchTime && styles.placeholderText]}>
-                      {matchTime || "Select match time"}
-                    </Text>
-                  </Pressable>
-                </>
-              )}
-
-              <View style={styles.toggleRow}>
-                <View style={styles.toggleTextWrap}>
-                  <Text style={styles.toggleTitle}>Editable before lock</Text>
-                  <Text style={styles.toggleSubtitle}>
-                    Switch this off if you want to freeze prediction edits manually.
-                  </Text>
-                </View>
-                <Switch
-                  value={isEditableBeforeLock}
-                  onValueChange={setIsEditableBeforeLock}
-                  trackColor={{ false: "#334C76", true: "#1E5AE0" }}
-                  thumbColor="#F7FAFF"
-                />
-              </View>
-
-              <Pressable
-                style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
-                onPress={handleCreateMatch}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isSubmitting ? "Creating..." : "Create Match"}
-                </Text>
-              </Pressable>
+              <AdminTabButton
+                label="+ Match"
+                active={activeSection === "create_match"}
+                onPress={() => setActiveSection("create_match")}
+              />
+              <AdminTabButton
+                label="Manage Match"
+                active={activeSection === "manage_match"}
+                onPress={() => setActiveSection("manage_match")}
+              />
             </View>
 
-          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-            <Text style={styles.cardTitle}>Manage Matches</Text>
-            <View style={styles.viewTabs}>
-              <Pressable
-                style={[styles.viewTab, activeMatchView === "live" && styles.viewTabActive]}
-                onPress={() => setActiveMatchView("live")}
-              >
-                <Text
-                  style={[
-                    styles.viewTabText,
-                    activeMatchView === "live" && styles.viewTabTextActive,
-                  ]}
-                >
-                  Live
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.viewTab, activeMatchView === "results" && styles.viewTabActive]}
-                onPress={() => setActiveMatchView("results")}
-              >
-                <Text
-                  style={[
-                    styles.viewTabText,
-                    activeMatchView === "results" && styles.viewTabTextActive,
-                  ]}
-                >
-                  Results
-                </Text>
-              </Pressable>
-            </View>
-            {isLoadingMatches ? (
-              <View style={styles.loadingState}>
-                <ActivityIndicator size="small" color="#1E5AE0" />
-              </View>
-            ) : visibleMatches.length ? (
-              visibleMatches.map((match) => (
-                <View key={match.id} style={styles.matchRow}>
-                  {(() => {
-                    const settlementLocked =
-                      match.status === "settled" ||
-                      match.status === "no_result" ||
-                      match.status === "completed";
+            {activeSection === "create_match" ? (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                  <Text style={styles.cardTitle}>Create Match</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Match number"
+                    placeholderTextColor="#4C5D7C"
+                    keyboardType="number-pad"
+                    value={matchNumber}
+                    onChangeText={(value) => setMatchNumber(value.replace(/[^0-9]/g, ""))}
+                  />
+                  <View style={styles.selectorSection}>
+                    <Text style={styles.selectorLabel}>Team A</Text>
+                    <View style={styles.teamGrid}>
+                      {IPL_TEAMS.map((team) => (
+                        <TeamOptionCard
+                          key={`team-a-${team.id}`}
+                          team={team}
+                          isSelected={teamAId === team.id}
+                          isDisabled={teamBId === team.id}
+                          onPress={() => setTeamAId(team.id)}
+                        />
+                      ))}
+                    </View>
+                  </View>
 
-                    return (
-                      <>
-                  <View style={styles.matchSummary}>
-                    <Text style={styles.matchName}>
-                      Match {match.matchNumber}: {match.teamAShort} vs {match.teamBShort}
+                  <View style={styles.selectorSection}>
+                    <Text style={styles.selectorLabel}>Team B</Text>
+                    <View style={styles.teamGrid}>
+                      {IPL_TEAMS.map((team) => (
+                        <TeamOptionCard
+                          key={`team-b-${team.id}`}
+                          team={team}
+                          isSelected={teamBId === team.id}
+                          isDisabled={teamAId === team.id}
+                          onPress={() => setTeamBId(team.id)}
+                        />
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.selectionSummaryCard}>
+                    <Text style={styles.selectionSummaryTitle}>Selected Teams</Text>
+                    <Text style={styles.selectionSummaryText}>
+                      {selectedTeamA
+                        ? `${selectedTeamA.name} (${selectedTeamA.shortCode})`
+                        : "Choose Team A"}
                     </Text>
-                    <Text style={styles.matchMeta}>
-                      {formatMatchDate(match.startAt)} | Winner:{" "}
-                      {formatWinner(match)}
+                    <Text style={styles.selectionSummaryText}>
+                      {selectedTeamB
+                        ? `${selectedTeamB.name} (${selectedTeamB.shortCode})`
+                        : "Choose Team B"}
                     </Text>
                   </View>
 
+                  {createMatchError ? (
+                    <View style={styles.formMessageError}>
+                      <Text style={styles.formMessageErrorText}>{createMatchError}</Text>
+                    </View>
+                  ) : null}
+
+                  {createMatchSuccess ? (
+                    <View style={styles.formMessageSuccess}>
+                      <Text style={styles.formMessageSuccessText}>{createMatchSuccess}</Text>
+                    </View>
+                  ) : null}
+                  {Platform.OS === "web" ? (
+                    <>
+                      <WebDateTimeInput
+                        type="date"
+                        value={matchDate}
+                        onChange={setMatchDate}
+                        placeholder="Match date"
+                      />
+                      <WebDateTimeInput
+                        type="time"
+                        value={matchTime}
+                        onChange={setMatchTime}
+                        placeholder="Match time"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Pressable style={styles.inputButton} onPress={() => openPicker("date")}>
+                        <Text style={[styles.inputButtonText, !matchDate && styles.placeholderText]}>
+                          {matchDate || "Select match date"}
+                        </Text>
+                      </Pressable>
+                      <Pressable style={styles.inputButton} onPress={() => openPicker("time")}>
+                        <Text style={[styles.inputButtonText, !matchTime && styles.placeholderText]}>
+                          {matchTime || "Select match time"}
+                        </Text>
+                      </Pressable>
+                    </>
+                  )}
+
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleTextWrap}>
-                      <Text style={styles.toggleTitle}>Allow edits before lock</Text>
+                      <Text style={styles.toggleTitle}>Editable before lock</Text>
                       <Text style={styles.toggleSubtitle}>
-                        Current status: {match.status.replace("_", " ")}
+                        Switch this off if you want to freeze prediction edits manually.
                       </Text>
                     </View>
                     <Switch
-                      value={match.isEditableBeforeLock}
-                      onValueChange={(value) => handleToggleEditing(match.id, value)}
+                      value={isEditableBeforeLock}
+                      onValueChange={setIsEditableBeforeLock}
                       trackColor={{ false: "#334C76", true: "#1E5AE0" }}
                       thumbColor="#F7FAFF"
                     />
                   </View>
 
-                  <View style={styles.actionRow}>
-                    <Pressable
-                      style={[
-                        styles.actionButton,
-                        settlementLocked && styles.actionButtonDisabled,
-                      ]}
-                      onPress={() => handleSetOutcome(match, "teamA")}
-                      disabled={settlementLocked}
-                    >
-                      <Text style={styles.actionButtonText}>{match.teamAShort}</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.actionButton,
-                        settlementLocked && styles.actionButtonDisabled,
-                      ]}
-                      onPress={() => handleSetOutcome(match, "teamB")}
-                      disabled={settlementLocked}
-                    >
-                      <Text style={styles.actionButtonText}>{match.teamBShort}</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.actionButtonAlt,
-                        settlementLocked && styles.actionButtonDisabled,
-                      ]}
-                      onPress={() => handleSetOutcome(match, "no_result")}
-                      disabled={settlementLocked}
-                    >
-                      <Text style={styles.actionButtonText}>No Result</Text>
-                    </Pressable>
-                  </View>
-
-                  {settlementLocked ? (
-                    <Text style={styles.lockedActionsText}>
-                      Result already recorded. Settlement actions are disabled.
+                  <Pressable
+                    style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+                    onPress={handleCreateMatch}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {isSubmitting ? "Creating..." : "Create Match"}
                     </Text>
-                  ) : null}
-                      </>
-                    );
-                  })()}
+                  </Pressable>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>
-                {activeMatchView === "live"
-                  ? "No live matches right now."
-                  : "No settled results recorded yet."}
-              </Text>
+              ) : activeSection === "manage_match" ? (
+                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                  <Text style={styles.cardTitle}>Manage Matches</Text>
+                  <View style={styles.viewTabs}>
+                    <AdminTabButton
+                      label="Live"
+                      active={activeMatchView === "live"}
+                      onPress={() => setActiveMatchView("live")}
+                      compact
+                    />
+                    <AdminTabButton
+                      label="Results"
+                      active={activeMatchView === "results"}
+                      onPress={() => setActiveMatchView("results")}
+                      compact
+                    />
+                  </View>
+                  {isLoadingMatches ? (
+                    <View style={styles.loadingState}>
+                      <ActivityIndicator size="small" color="#1E5AE0" />
+                    </View>
+                  ) : visibleMatches.length ? (
+                    visibleMatches.map((match) => {
+                      const settlementLocked =
+                        match.status === "settled" ||
+                        match.status === "no_result" ||
+                        match.status === "completed";
+                      const backupInfo = backupAvailability[match.id];
+                      const hasBackup = !!backupInfo?.hasBackup;
+
+                      return (
+                        <View key={match.id} style={styles.matchRow}>
+                          <View style={styles.matchSummary}>
+                            <Text style={styles.matchName}>
+                              Match {match.matchNumber}: {match.teamAShort} vs {match.teamBShort}
+                            </Text>
+                            <Text style={styles.matchMeta}>
+                              {formatMatchDate(match.startAt)} | Winner: {formatWinner(match)}
+                            </Text>
+                          </View>
+
+                          <View style={styles.toggleRow}>
+                            <View style={styles.toggleTextWrap}>
+                              <Text style={styles.toggleTitle}>Allow edits before lock</Text>
+                              <Text style={styles.toggleSubtitle}>
+                                Current status: {match.status.replace("_", " ")}
+                              </Text>
+                            </View>
+                            <Switch
+                              value={match.isEditableBeforeLock}
+                              onValueChange={(value: boolean) => handleToggleEditing(match.id, value)}
+                              trackColor={{ false: "#334C76", true: "#1E5AE0" }}
+                              thumbColor="#F7FAFF"
+                            />
+                          </View>
+
+                          <View style={styles.actionRow}>
+                            <Pressable
+                              style={[
+                                styles.actionButton,
+                                settlementLocked && styles.actionButtonDisabled,
+                              ]}
+                              onPress={() => handleSetOutcome(match, "teamA")}
+                              disabled={settlementLocked}
+                            >
+                              <Text style={styles.actionButtonText}>{match.teamAShort}</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.actionButton,
+                                settlementLocked && styles.actionButtonDisabled,
+                              ]}
+                              onPress={() => handleSetOutcome(match, "teamB")}
+                              disabled={settlementLocked}
+                            >
+                              <Text style={styles.actionButtonText}>{match.teamBShort}</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.actionButtonAlt,
+                                settlementLocked && styles.actionButtonDisabled,
+                              ]}
+                              onPress={() => handleSetOutcome(match, "no_result")}
+                              disabled={settlementLocked}
+                            >
+                              <Text style={styles.actionButtonText}>No Result</Text>
+                            </Pressable>
+                          </View>
+
+                          {settlementLocked ? (
+                            <View style={styles.lockedActionsWrap}>
+                              <Text style={styles.lockedActionsText}>
+                                {hasBackup
+                                  ? "Result already recorded. Backup available for revert."
+                                  : "Result already recorded. No backup available for revert."}
+                              </Text>
+                              {hasBackup ? (
+                                <Pressable
+                                  style={[
+                                    styles.revertButton,
+                                    isReverting && styles.actionButtonDisabled,
+                                  ]}
+                                  onPress={() =>
+                                    setPendingRevert({
+                                      matchId: match.id,
+                                      matchLabel: `${match.teamAShort} vs ${match.teamBShort}`,
+                                    })
+                                  }
+                                  disabled={isReverting}
+                                >
+                                  <Text style={styles.revertButtonText}>Revert Settlement</Text>
+                                </Pressable>
+                              ) : (
+                                <Text style={styles.noBackupText}>No backup found for this match.</Text>
+                              )}
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptyText}>
+                      {activeMatchView === "live"
+                        ? "No live matches right now."
+                        : "No settled results recorded yet."}
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                  <Text style={styles.cardTitle}>Users List</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.userTableScrollContent}
+                >
+                  <View style={styles.userTable}>
+                    <View style={styles.userTableHeader}>
+                      <View style={[styles.userCell, styles.userNameCell]}>
+                        <Text style={styles.userTableHeaderText}>Name</Text>
+                      </View>
+                      <View style={[styles.userCell, styles.userPhoneCell]}>
+                        <Text style={styles.userTableHeaderText}>Phone</Text>
+                      </View>
+                      <View style={[styles.userCell, styles.userStatusCell]}>
+                        <Text style={styles.userTableHeaderText}>Status</Text>
+                      </View>
+                      <View style={[styles.userCell, styles.userRoleCell]}>
+                        <Text style={styles.userTableHeaderText}>Role</Text>
+                      </View>
+                        <View style={[styles.userCell, styles.userActionCell]}>
+                          <Text style={styles.userTableHeaderText}>Email</Text>
+                        </View>
+                      </View>
+                      {isLoadingUsers ? (
+                        <View style={styles.loadingState}>
+                          <ActivityIndicator size="small" color="#1E5AE0" />
+                        </View>
+                      ) : users.length ? (
+                        users.map((entry) => (
+                          <UserRow key={entry.uid} user={entry} onRowPress={() => setSelectedUser(entry)} />
+                        ))
+                      ) : (
+                        <Text style={styles.emptyText}>No users found yet.</Text>
+                      )}
+                    </View>
+                  </ScrollView>
+              </View>
             )}
-          </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {Platform.OS === "web" ? (
-        settlementDialog
-      ) : (
-        <Modal
-          visible={!!pendingSettlement}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setPendingSettlement(null)}
-        >
+        <>
           {settlementDialog}
-        </Modal>
+          {revertDialog}
+          {userDialog}
+        </>
+      ) : (
+        <>
+          <Modal
+            visible={!!pendingSettlement}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPendingSettlement(null)}
+          >
+            {settlementDialog}
+          </Modal>
+          <Modal
+            visible={!!pendingRevert}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPendingRevert(null)}
+          >
+            {revertDialog}
+          </Modal>
+          <Modal
+            visible={!!selectedUser}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setSelectedUser(null)}
+          >
+            {userDialog}
+          </Modal>
+        </>
       )}
 
       {NativeDateTimePicker && pickerMode ? (
@@ -615,6 +896,84 @@ function buildPickerSeed(dateValue: string, timeValue: string) {
   }
 
   return new Date();
+}
+
+function AdminTabButton({
+  label,
+  active,
+  onPress,
+  compact = false,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <Pressable
+      style={[
+        styles.viewTab,
+        compact ? styles.viewTabCompact : styles.viewTabWide,
+        active && styles.viewTabActive,
+      ]}
+      onPress={onPress}
+    >
+      <Text style={[styles.viewTabText, active && styles.viewTabTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function formatUserAccessStatus(user: UserProfileRecord) {
+  return "Active";
+}
+
+function UserRow({
+  user,
+  actionLabel,
+  onRowPress,
+}: {
+  user: UserProfileRecord;
+  actionLabel?: string;
+  onRowPress?: () => void;
+}) {
+  const content = (
+    <View style={styles.userTableRow}>
+      <View style={[styles.userCell, styles.userNameCell]}>
+        <Text style={styles.userTablePrimary}>{user.displayName}</Text>
+      </View>
+      <View style={[styles.userCell, styles.userPhoneCell]}>
+        <Text style={styles.userTableText}>{user.phoneNumber || "-"}</Text>
+      </View>
+      <View style={[styles.userCell, styles.userStatusCell]}>
+        <Text style={styles.userTableText}>{formatUserAccessStatus(user)}</Text>
+      </View>
+      <View style={[styles.userCell, styles.userRoleCell]}>
+        <Text style={styles.userTableText}>{user.role === "admin" ? "Admin" : "User"}</Text>
+      </View>
+      <View style={[styles.userCell, styles.userActionCell]}>
+        <Text style={styles.userTableMuted}>{actionLabel || user.email || "-"}</Text>
+      </View>
+    </View>
+  );
+
+  if (!onRowPress) {
+    return content;
+  }
+
+  return (
+    <Pressable onPress={onRowPress} style={styles.userRowPressable}>
+      {content}
+    </Pressable>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
 }
 
 function formatDateValue(value: Date) {
@@ -722,7 +1081,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 24,
+    padding: 18,
     paddingTop: 48,
     gap: 22,
   },
@@ -738,6 +1097,11 @@ const styles = StyleSheet.create({
   pageShellDesktop: {
     maxWidth: 1040,
     gap: 24,
+  },
+  sectionTabs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
   },
   headerRow: {
     flexDirection: "row",
@@ -799,10 +1163,10 @@ const styles = StyleSheet.create({
   },
   viewTabs: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   viewTab: {
-    minWidth: 92,
     height: 40,
     borderRadius: 12,
     borderWidth: 1,
@@ -811,6 +1175,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
+  },
+  viewTabWide: {
+    minWidth: 132,
+  },
+  viewTabCompact: {
+    minWidth: 92,
   },
   viewTabActive: {
     borderColor: "#1E5AE0",
@@ -1036,6 +1406,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+  lockedActionsWrap: {
+    gap: 10,
+  },
+  revertButton: {
+    alignSelf: "flex-start",
+    minWidth: 136,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8D2F2F",
+    paddingHorizontal: 14,
+  },
+  revertButtonText: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  noBackupText: {
+    color: "#93A1BC",
+    fontSize: 13,
+    lineHeight: 18,
+  },
   blockedCard: {
     margin: 24,
     marginTop: 80,
@@ -1074,6 +1467,72 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
+  userTable: {
+    borderWidth: 1,
+    borderColor: "#223A63",
+    minWidth: 760,
+  },
+  userTableScrollContent: {
+    minWidth: "100%",
+  },
+  userTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#0E1B36",
+    borderBottomWidth: 1,
+    borderBottomColor: "#223A63",
+  },
+  userTableHeaderText: {
+    color: "#DCE8FF",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  userTableRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "#223A63",
+    borderTopWidth: 0,
+    backgroundColor: "#102042",
+  },
+  userRowPressable: {
+    width: "100%",
+  },
+  userCell: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    justifyContent: "center",
+  },
+  userNameCell: {
+    width: 180,
+  },
+  userPhoneCell: {
+    width: 140,
+  },
+  userStatusCell: {
+    width: 120,
+  },
+  userRoleCell: {
+    width: 90,
+  },
+  userActionCell: {
+    width: 230,
+  },
+  userTablePrimary: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  userTableText: {
+    color: "#D1DBF0",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  userTableMuted: {
+    color: "#93A1BC",
+    fontSize: 12,
+    lineHeight: 17,
+  },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
@@ -1089,8 +1548,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",
-    padding: 22,
-    gap: 14,
+    padding: 18,
+    gap: 12,
+    maxHeight: "88%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  modalHeaderTextWrap: {
+    flex: 1,
+    gap: 6,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBodyScroll: {
+    flexGrow: 0,
+  },
+  modalBodyContent: {
+    gap: 12,
   },
   confirmTitle: {
     color: "#F7FAFF",
@@ -1107,6 +1593,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  detailRow: {
+    width: "48%",
+    minHeight: 68,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  detailLabel: {
+    color: "#93A1BC",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  detailValue: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
   confirmPrimaryButton: {
     marginTop: 6,
     height: 52,
@@ -1114,6 +1629,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1E5AE0",
+  },
+  confirmDangerButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#8D2F2F",
   },
   confirmPrimaryButtonText: {
     color: "#F7FAFF",
