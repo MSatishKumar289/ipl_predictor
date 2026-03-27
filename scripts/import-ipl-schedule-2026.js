@@ -27,42 +27,6 @@ const MATCH_LOCK_MINUTES = 5;
 const SIGNUP_BONUS = 50000;
 const IN_QUERY_CHUNK = 10;
 
-const TEAM_NAMES = {
-  RCB: "Royal Challengers Bengaluru",
-  SRH: "Sunrisers Hyderabad",
-  MI: "Mumbai Indians",
-  KKR: "Kolkata Knight Riders",
-  RR: "Rajasthan Royals",
-  CSK: "Chennai Super Kings",
-  PBKS: "Punjab Kings",
-  GT: "Gujarat Titans",
-  LSG: "Lucknow Super Giants",
-  DC: "Delhi Capitals",
-};
-
-const SCHEDULE = [
-  ["2026-03-28", "RCB", "SRH", "19:30"],
-  ["2026-03-29", "MI", "KKR", "19:30"],
-  ["2026-03-30", "RR", "CSK", "19:30"],
-  ["2026-03-31", "PBKS", "GT", "19:30"],
-  ["2026-04-01", "LSG", "DC", "19:30"],
-  ["2026-04-02", "KKR", "SRH", "19:30"],
-  ["2026-04-03", "CSK", "PBKS", "19:30"],
-  ["2026-04-04", "DC", "MI", "15:30"],
-  ["2026-04-04", "GT", "RR", "19:30"],
-  ["2026-04-05", "SRH", "LSG", "15:30"],
-  ["2026-04-05", "RCB", "CSK", "19:30"],
-  ["2026-04-06", "KKR", "PBKS", "19:30"],
-  ["2026-04-07", "RR", "MI", "19:30"],
-  ["2026-04-08", "DC", "GT", "19:30"],
-  ["2026-04-09", "KKR", "LSG", "19:30"],
-  ["2026-04-10", "RR", "RCB", "19:30"],
-  ["2026-04-11", "PBKS", "SRH", "15:30"],
-  ["2026-04-11", "CSK", "DC", "19:30"],
-  ["2026-04-12", "LSG", "GT", "15:30"],
-  ["2026-04-12", "MI", "RCB", "19:30"],
-];
-
 function loadEnvFile() {
   const envPath = path.join(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
@@ -191,23 +155,42 @@ async function resetNonAdminUsers(db) {
   return updatedUsers;
 }
 
+function loadSchedule() {
+  const filePath = path.join(process.cwd(), "data", "ipl-2026-fixtures.json");
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Fixture file not found at ${filePath}`);
+  }
+
+  const raw = fs.readFileSync(filePath, "utf8");
+  const fixtures = JSON.parse(raw);
+
+  if (!Array.isArray(fixtures) || !fixtures.length) {
+    throw new Error("Fixture file is empty or invalid.");
+  }
+
+  return fixtures;
+}
+
 function buildMatchPayload() {
-  return SCHEDULE.map(([date, teamA, teamB, time], index) => {
-    const startAt = new Date(`${date}T${time}:00+05:30`);
+  const fixtures = loadSchedule();
+
+  return fixtures.map((fixture) => {
+    const startAt = new Date(fixture.startAt);
     const lockAt = new Date(startAt.getTime() - MATCH_LOCK_MINUTES * 60 * 1000);
 
     return {
-      id: `match-2026-${String(index + 1).padStart(2, "0")}`,
-      matchNumber: index + 1,
-      teamAName: TEAM_NAMES[teamA],
-      teamBName: TEAM_NAMES[teamB],
-      teamAShort: teamA,
-      teamBShort: teamB,
+      id: `match-2026-${String(fixture.matchNumber).padStart(2, "0")}`,
+      matchNumber: fixture.matchNumber,
+      teamAName: fixture.teamAName,
+      teamBName: fixture.teamBName,
+      teamAShort: fixture.teamAShort,
+      teamBShort: fixture.teamBShort,
       startAt: startAt.toISOString(),
       lockAt: lockAt.toISOString(),
       status: "upcoming",
       winner: null,
-      isEditableBeforeLock: true,
+      isEditableBeforeLock: fixture.isEditableBeforeLock !== false,
       settledAt: null,
       settledBy: null,
     };
