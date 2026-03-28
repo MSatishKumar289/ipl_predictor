@@ -176,15 +176,7 @@ export function subscribeToLeaderboardUsers(
             return right.points - left.points;
           }
 
-          if (right.wins !== left.wins) {
-            return right.wins - left.wins;
-          }
-
-          if (left.losses !== right.losses) {
-            return left.losses - right.losses;
-          }
-
-          return right.totalPredictions - left.totalPredictions;
+          return right.balance - left.balance;
         });
 
       callback(users);
@@ -270,6 +262,88 @@ export async function deleteUserRecords(uid: string) {
 
     await batch.commit();
   }
+}
+
+export async function updateCurrentUserDisplayName(user: User, displayName: string) {
+  const { db } = getFirebaseServices();
+  const normalizedDisplayName = validateDisplayName(displayName);
+  const userRef = doc(db, "users", user.uid);
+  const predictionsQuery = query(collection(db, "predictions"), where("userId", "==", user.uid));
+  const referralsQuery = query(
+    collection(db, "referrals"),
+    where("referrerUserId", "==", user.uid)
+  );
+  const referredUsersQuery = query(
+    collection(db, "users"),
+    where("referredByUserId", "==", user.uid)
+  );
+
+  const [userSnapshot, predictionSnapshots, referralSnapshots, referredUserSnapshots] =
+    await Promise.all([
+      getDoc(userRef),
+      getDocs(predictionsQuery),
+      getDocs(referralsQuery),
+      getDocs(referredUsersQuery),
+    ]);
+
+  if (!userSnapshot.exists()) {
+    throw new Error("User profile not found.");
+  }
+
+  const currentProfile = userSnapshot.data() as UserProfile;
+  if (currentProfile.displayName === normalizedDisplayName && user.displayName === normalizedDisplayName) {
+    return currentProfile;
+  }
+
+  const updates = [
+    {
+      ref: userRef,
+      data: {
+        displayName: normalizedDisplayName,
+        updatedAt: serverTimestamp(),
+      },
+    },
+    ...predictionSnapshots.docs.map((snapshot) => ({
+      ref: snapshot.ref,
+      data: {
+        userDisplayName: normalizedDisplayName,
+        updatedAt: serverTimestamp(),
+      },
+    })),
+    ...referralSnapshots.docs.map((snapshot) => ({
+      ref: snapshot.ref,
+      data: {
+        referrerDisplayName: normalizedDisplayName,
+        updatedAt: serverTimestamp(),
+      },
+    })),
+    ...referredUserSnapshots.docs.map((snapshot) => ({
+      ref: snapshot.ref,
+      data: {
+        referredByDisplayName: normalizedDisplayName,
+        updatedAt: serverTimestamp(),
+      },
+    })),
+  ];
+
+  for (let index = 0; index < updates.length; index += 400) {
+    const batch = writeBatch(db);
+
+    for (const updateEntry of updates.slice(index, index + 400)) {
+      batch.update(updateEntry.ref, updateEntry.data);
+    }
+
+    await batch.commit();
+  }
+
+  if (user.displayName !== normalizedDisplayName) {
+    await updateProfile(user, { displayName: normalizedDisplayName });
+  }
+
+  return {
+    ...currentProfile,
+    displayName: normalizedDisplayName,
+  } as UserProfile;
 }
 
 export async function ensureUserProfile(

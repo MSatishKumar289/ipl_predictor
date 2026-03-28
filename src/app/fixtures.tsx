@@ -11,18 +11,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { BackButton } from "@/components/BackButton";
-import { IPL_TEAMS } from "@/lib/ipl-teams";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
-
-type TeamVisual = {
-  name: string;
-  shortCode: string;
-};
-
-const teamByShortCode = new Map(
-  IPL_TEAMS.map((team) => [team.shortCode, team] as const)
-);
 
 export default function FixturesScreen() {
   const { width } = useWindowDimensions();
@@ -48,16 +38,6 @@ export default function FixturesScreen() {
     return unsubscribe;
   }, []);
 
-  const fixtureRows = useMemo(
-    () =>
-      matches.map((match) => ({
-        ...match,
-        teamA: teamByShortCode.get(match.teamAShort) ?? null,
-        teamB: teamByShortCode.get(match.teamBShort) ?? null,
-      })),
-    [matches]
-  );
-
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -81,38 +61,47 @@ export default function FixturesScreen() {
             </View>
           ) : null}
 
-          <View style={styles.tableWrap}>
-            <View style={[styles.tableHeader, isCompact && styles.tableHeaderCompact]}>
-              <View style={[styles.matchCol, isCompact && styles.matchColCompact, styles.headerCellLeft]}>
-                <Text style={styles.tableHeaderText}>Match</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tableScrollContent}
+          >
+            <View style={styles.tableWrap}>
+              <View style={styles.tableHeader}>
+                <View style={[styles.matchCol, styles.headerCellLeft]}>
+                  <Text style={styles.tableHeaderText}>#</Text>
+                </View>
+                <View style={[styles.teamsCol, styles.headerCellCenter]}>
+                  <Text style={styles.tableHeaderText}>Teams</Text>
+                </View>
+                <View style={[styles.venueCol, styles.headerCellLeft]}>
+                  <Text style={styles.tableHeaderText}>Venue</Text>
+                </View>
+                <View style={[styles.statusCol, styles.statusHeaderCell]}>
+                  <Text style={styles.tableHeaderText}>Status</Text>
+                </View>
+                <View style={[styles.timeCol, styles.headerCellCenter]}>
+                  <Text style={styles.tableHeaderText}>Start</Text>
+                </View>
               </View>
-              <View style={[styles.teamsCol, isCompact && styles.teamsColCompact, styles.headerCellCenter]}>
-                <Text style={styles.tableHeaderText}>Teams</Text>
-              </View>
-              <View style={[styles.timeCol, isCompact && styles.timeColCompact, styles.headerCellLeft]}>
-                <Text style={styles.tableHeaderText}>Start</Text>
-              </View>
-              <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.statusHeaderCell]}>
-                <Text style={styles.tableHeaderText}>Status</Text>
-              </View>
-            </View>
 
-            {isLoading ? (
-              <View style={styles.loadingState}>
-                <ActivityIndicator size="large" color="#2463EB" />
-                <Text style={styles.loadingText}>Loading fixtures...</Text>
-              </View>
-            ) : fixtureRows.length ? (
-              fixtureRows.map((match) => (
-                <FixtureRow key={match.id} match={match} isCompact={isCompact} />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>No fixtures yet</Text>
-                <Text style={styles.emptyText}>Scheduled fixtures will appear here automatically.</Text>
-              </View>
-            )}
-          </View>
+              {isLoading ? (
+                <View style={styles.loadingState}>
+                  <ActivityIndicator size="large" color="#2463EB" />
+                  <Text style={styles.loadingText}>Loading fixtures...</Text>
+                </View>
+              ) : matches.length ? (
+                matches.map((match) => (
+                  <FixtureRow key={match.id} match={match} isCompact={isCompact} />
+                ))
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyTitle}>No fixtures yet</Text>
+                  <Text style={styles.emptyText}>Scheduled fixtures will appear here automatically.</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
         </View>
       </ScrollView>
 
@@ -125,86 +114,37 @@ function FixtureRow({
   match,
   isCompact,
 }: {
-  match: MatchRecord & { teamA: TeamVisual | null; teamB: TeamVisual | null };
+  match: MatchRecord;
   isCompact: boolean;
 }) {
-  const teamsContent = isCompact ? (
-    <View style={[styles.teamsCol, styles.teamsColCompact, styles.teamsCellCompact]}>
-      <Text style={styles.teamCodeCompact}>{match.teamAShort}</Text>
-      <Text style={[styles.vsText, styles.vsTextCompactStack]}>VS</Text>
-      <Text style={styles.teamCodeCompact}>{match.teamBShort}</Text>
-    </View>
-  ) : (
-    <View style={[styles.teamsCol, styles.teamsCell]}>
-      <TeamCell
-        shortCode={match.teamAShort}
-        fullName={match.teamAName}
-        align="left"
-        isCompact={false}
-      />
-      <Text style={styles.vsText}>VS</Text>
-      <TeamCell
-        shortCode={match.teamBShort}
-        fullName={match.teamBName}
-        align="right"
-        isCompact={false}
-      />
-    </View>
-  );
-
   return (
-    <View style={[styles.row, isCompact && styles.rowCompact]}>
-      <Text style={[styles.rowMatchText, styles.matchCol, isCompact && styles.matchColCompact]}>
-        Match {match.matchNumber}
+    <View style={styles.row}>
+      <Text style={[styles.rowMatchText, styles.matchCol]}>
+        #{match.matchNumber}
       </Text>
 
-      {teamsContent}
-
-      <View style={[styles.timeCol, isCompact && styles.timeColCompact]}>
-        <Text style={styles.rowPrimary}>{formatFixtureDate(match.startAt)}</Text>
-        <Text style={styles.rowSecondary}>{formatFixtureTime(match.startAt)}</Text>
+      <View style={[styles.teamsCol, styles.teamsCellInline]}>
+        <Text style={styles.teamsInlineText} numberOfLines={1}>
+          {match.teamAShort} <Text style={styles.teamsInlineVs}>vs</Text> {match.teamBShort}
+        </Text>
       </View>
 
-      <View style={[styles.statusCol, isCompact && styles.statusColCompact, styles.statusCell]}>
+      <View style={styles.venueCol}>
+        <Text style={styles.venueText} numberOfLines={isCompact ? 3 : 2}>
+          {match.venue || "-"}
+        </Text>
+      </View>
+
+      <View style={[styles.statusCol, styles.statusCell]}>
         <View style={[styles.statusChip, getStatusChipStyle(match.status)]}>
           <Text style={styles.statusText}>{formatStatus(match.status)}</Text>
         </View>
       </View>
-    </View>
-  );
-}
 
-function TeamCell({
-  shortCode,
-  fullName,
-  align,
-  isCompact,
-}: {
-  shortCode: string;
-  fullName: string;
-  align: "left" | "right";
-  isCompact: boolean;
-}) {
-  return (
-    <View
-      style={[
-        styles.teamCell,
-        isCompact && styles.teamCellCompact,
-        align === "right" && styles.teamCellRight,
-      ]}
-    >
-      {isCompact ? (
-        <Text style={styles.teamCodeCompact}>{shortCode}</Text>
-      ) : (
-        <>
-          <View style={[styles.teamTextWrap, align === "right" && styles.teamTextWrapRight]}>
-            <Text style={styles.teamCode}>{shortCode}</Text>
-            <Text style={styles.teamName} numberOfLines={2}>
-              {fullName}
-            </Text>
-          </View>
-        </>
-      )}
+      <View style={[styles.timeCol, styles.timeCell]}>
+        <Text style={styles.rowPrimary}>{formatFixtureDate(match.startAt)}</Text>
+        <Text style={styles.rowSecondary}>{formatFixtureTime(match.startAt)}</Text>
+      </View>
     </View>
   );
 }
@@ -264,7 +204,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 18,
+    padding: 14,
     paddingTop: 36,
     paddingBottom: 40,
   },
@@ -272,7 +212,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 1120,
     alignSelf: "center",
-    gap: 22,
+    gap: 18,
   },
   header: {
     gap: 10,
@@ -323,78 +263,56 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   tableWrap: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#102042",
-    overflow: "hidden",
+    backgroundColor: "transparent",
+    minWidth: 646,
+  },
+  tableScrollContent: {
+    paddingBottom: 4,
   },
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     backgroundColor: "#132445",
     borderBottomWidth: 1,
     borderBottomColor: "#223A63",
-    gap: 12,
-  },
-  tableHeaderCompact: {
-    paddingHorizontal: 12,
-    gap: 8,
+    gap: 5,
   },
   tableHeaderText: {
     color: "#7FAAFF",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.9,
+    letterSpacing: 0.6,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    gap: 5,
     borderBottomWidth: 1,
     borderBottomColor: "#1B2B4A",
   },
-  rowCompact: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    gap: 8,
-  },
   matchCol: {
-    width: 74,
-  },
-  matchColCompact: {
-    width: 58,
+    width: 32,
   },
   teamsCol: {
-    flex: 1,
+    width: 110,
   },
-  teamsColCompact: {
-    width: 46,
-    flexGrow: 0,
-    flexShrink: 0,
-    flexBasis: 46,
+  venueCol: {
+    width: 154,
   },
   timeCol: {
-    width: 88,
-    paddingLeft: 12,
-  },
-  timeColCompact: {
-    width: 72,
-    paddingLeft: 0,
+    width: 82,
+    paddingLeft: 4,
   },
   statusCol: {
-    width: 96,
-  },
-  statusColCompact: {
-    width: 88,
+    width: 84,
   },
   statusHeaderCell: {
-    alignItems: "flex-end",
+    alignItems: "flex-start",
   },
   headerCellLeft: {
     alignItems: "flex-start",
@@ -404,88 +322,52 @@ const styles = StyleSheet.create({
   },
   rowMatchText: {
     color: "#DDE5F7",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
-  teamsCell: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  venueText: {
+    color: "#A8B5D0",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
   },
-  teamsCellCompact: {
+  teamsCellInline: {
     justifyContent: "center",
-    alignItems: "center",
-    gap: 2,
   },
-  teamCell: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  teamCellCompact: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
-  },
-  teamCellRight: {
-    justifyContent: "flex-end",
-  },
-  teamTextWrap: {
-    flexShrink: 1,
-    gap: 2,
-  },
-  teamTextWrapRight: {
-    alignItems: "flex-end",
-  },
-  teamCode: {
+  teamsInlineText: {
     color: "#F7FAFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  teamCodeCompact: {
-    color: "#F7FAFF",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  teamName: {
-    color: "#8EA0C1",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  vsText: {
-    color: "#60759D",
     fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  teamsInlineVs: {
+    color: "#60759D",
+    fontSize: 12,
     fontWeight: "900",
-  },
-  vsTextCompact: {
-    fontSize: 10,
-    marginHorizontal: 2,
-  },
-  vsTextCompactStack: {
-    fontSize: 10,
-    marginHorizontal: 0,
-    lineHeight: 12,
   },
   rowPrimary: {
     color: "#F5F8FF",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
+    textAlign: "center",
   },
   rowSecondary: {
     color: "#8EA0C1",
     fontSize: 11,
     fontWeight: "600",
-    marginTop: 3,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  timeCell: {
+    alignItems: "center",
   },
   statusCell: {
     alignItems: "flex-end",
   },
   statusChip: {
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderWidth: 1,
   },
   statusScheduled: {
