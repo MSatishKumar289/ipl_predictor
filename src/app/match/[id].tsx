@@ -429,34 +429,41 @@ export default function MatchDetailScreen() {
 
                 {canEdit ? (
                   <>
-                    <Pressable
-                      style={[
-                        styles.primaryButton,
-                        (isSubmitting || isDeleting) && styles.buttonDisabled,
-                      ]}
-                      onPress={handlePrimaryAction}
-                      disabled={isSubmitting || isDeleting}
-                    >
-                      <Text style={styles.primaryButtonText}>
-                        {prediction
-                          ? isEditingPrediction
-                            ? "Review Bet"
-                            : "Edit Bet"
-                          : "Review Prediction"}
-                      </Text>
-                    </Pressable>
-
-                    {prediction ? (
+                    <View style={styles.actionRow}>
                       <Pressable
-                        style={[styles.deleteButton, isDeleting && styles.buttonDisabled]}
-                        onPress={handleDeletePrediction}
-                        disabled={isDeleting || isSubmitting}
+                        style={[
+                          styles.primaryButton,
+                          styles.actionButton,
+                          (isSubmitting || isDeleting) && styles.buttonDisabled,
+                        ]}
+                        onPress={handlePrimaryAction}
+                        disabled={isSubmitting || isDeleting}
                       >
-                        <Text style={styles.deleteButtonText}>
-                          {isDeleting ? "Deleting..." : "Delete Bet"}
+                        <Text style={styles.primaryButtonText}>
+                          {prediction
+                            ? isEditingPrediction
+                              ? "Review Bet"
+                              : "Edit Bet"
+                            : "Review Prediction"}
                         </Text>
                       </Pressable>
-                    ) : null}
+
+                      {prediction ? (
+                        <Pressable
+                          style={[
+                            styles.deleteButton,
+                            styles.actionButton,
+                            isDeleting && styles.buttonDisabled,
+                          ]}
+                          onPress={handleDeletePrediction}
+                          disabled={isDeleting || isSubmitting}
+                        >
+                          <Text style={styles.deleteButtonText}>
+                            {isDeleting ? "Deleting..." : "Delete Bet"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </>
                 ) : (
                   <Text style={styles.lockedText}>
@@ -919,6 +926,13 @@ const styles = StyleSheet.create({
     color: "#9FB0CF",
     fontSize: 13,
     lineHeight: 18,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
   },
   primaryButton: {
     height: 50,

@@ -1,18 +1,85 @@
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { CloseIcon } from "@/components/CloseIcon";
 import { CoinAmount } from "@/components/CoinAmount";
+import { EditIcon } from "@/components/EditIcon";
+import { updateCurrentUserDisplayName } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function ProfileTab() {
-  const { profile, error } = useAuth();
+  const { user, profile, error } = useAuth();
   const { width } = useWindowDimensions();
   const logoutRoute = "/logout" as Href;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [nameMessage, setNameMessage] = useState<{
+    tone: "error" | "success";
+    text: string;
+  } | null>(null);
   const isDesktop = width >= 1024;
+
+  useEffect(() => {
+    setDisplayNameDraft(profile?.displayName ?? "");
+  }, [profile?.displayName]);
+
+  async function handleSaveDisplayName() {
+    setNameMessage(null);
+
+    if (!user || !profile) {
+      const message = "Your profile is still loading. Try again in a moment.";
+      setNameMessage({ tone: "error", text: message });
+      Alert.alert("Profile missing", message);
+      return;
+    }
+
+    const nextDisplayName = displayNameDraft.trim();
+
+    if (!nextDisplayName) {
+      const message = "Display name cannot be empty.";
+      setNameMessage({ tone: "error", text: message });
+      Alert.alert("Invalid name", message);
+      return;
+    }
+
+    if (nextDisplayName === profile.displayName) {
+      const message = "Enter a different name to update your profile.";
+      setNameMessage({ tone: "error", text: message });
+      Alert.alert("No changes", message);
+      return;
+    }
+
+    try {
+      setIsSavingName(true);
+      await updateCurrentUserDisplayName(user, nextDisplayName);
+      setNameMessage({ tone: "success", text: "Your display name has been updated." });
+      setIsEditNameOpen(false);
+      Alert.alert("Name updated", "Your display name has been updated.");
+    } catch (saveError) {
+      const message =
+        saveError instanceof Error ? saveError.message : "Unable to update your display name.";
+      setNameMessage({ tone: "error", text: message });
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsSavingName(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -42,6 +109,16 @@ export default function ProfileTab() {
           ) : null}
 
           <View style={styles.heroCard}>
+            <Pressable
+              style={styles.editTrigger}
+              onPress={() => {
+                setNameMessage(null);
+                setDisplayNameDraft(profile?.displayName ?? "");
+                setIsEditNameOpen(true);
+              }}
+            >
+              <EditIcon />
+            </Pressable>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{getInitials(profile?.displayName)}</Text>
             </View>
@@ -89,12 +166,80 @@ export default function ProfileTab() {
               value={profile?.role === "admin" ? "Admin access enabled" : "Standard player"}
             />
           </View>
+
           <Pressable style={styles.logoutButton} onPress={() => router.push(logoutRoute)}>
             <Text style={styles.logoutButtonText}>Sign Out</Text>
           </Pressable>
         </View>
       </ScrollView>
       <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
+
+      <Modal
+        visible={isEditNameOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditNameOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsEditNameOpen(false)} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTextWrap}>
+                <Text style={styles.modalTitle}>Update Name</Text>
+                <Text style={styles.modalSubtitle}>Change how your name appears in the app.</Text>
+              </View>
+              <Pressable style={styles.modalCloseButton} onPress={() => setIsEditNameOpen(false)}>
+                <CloseIcon />
+              </Pressable>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your display name"
+              placeholderTextColor="#5F6B82"
+              value={displayNameDraft}
+              onChangeText={setDisplayNameDraft}
+              maxLength={40}
+              editable={!isSavingName}
+              autoFocus
+            />
+
+            {nameMessage ? (
+              <View
+                style={[
+                  styles.messageCard,
+                  nameMessage.tone === "error"
+                    ? styles.messageCardError
+                    : styles.messageCardSuccess,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.messageText,
+                    nameMessage.tone === "error"
+                      ? styles.messageTextError
+                      : styles.messageTextSuccess,
+                  ]}
+                >
+                  {nameMessage.text}
+                </Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[styles.primaryButton, isSavingName && styles.buttonDisabled]}
+              onPress={() => void handleSaveDisplayName()}
+              disabled={isSavingName}
+            >
+              {isSavingName ? (
+                <ActivityIndicator size="small" color="#F7FAFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Update</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -230,6 +375,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   heroCard: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
@@ -238,6 +384,20 @@ const styles = StyleSheet.create({
     borderColor: "#223A63",
     backgroundColor: "#102042",
     padding: 20,
+  },
+  editTrigger: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 1,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2E4F8E",
+    backgroundColor: "#132952",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatar: {
     width: 72,
@@ -368,6 +528,107 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     textAlign: "right",
+  },
+  input: {
+    minHeight: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    paddingHorizontal: 16,
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  messageCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  messageCardError: {
+    borderColor: "#7A2A2A",
+    backgroundColor: "#311515",
+  },
+  messageCardSuccess: {
+    borderColor: "#1D6A48",
+    backgroundColor: "#103222",
+  },
+  messageText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
+  messageTextError: {
+    color: "#F0B3B3",
+  },
+  messageTextSuccess: {
+    color: "#B8F0D1",
+  },
+  primaryButton: {
+    minHeight: 54,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1E5AE0",
+  },
+  primaryButtonText: {
+    color: "#F7FAFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  buttonDisabled: {
+    opacity: 0.72,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(3, 10, 20, 0.62)",
+    paddingHorizontal: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#102042",
+    padding: 20,
+    gap: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  modalHeaderTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  modalTitle: {
+    color: "#F7FAFF",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  modalSubtitle: {
+    color: "#8EA0C1",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoutButton: {
     height: 56,

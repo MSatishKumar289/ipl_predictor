@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { CoinAmount } from "@/components/CoinAmount";
+import { LockIcon } from "@/components/LockIcon";
 import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -120,7 +121,6 @@ export default function HomeTab() {
             iconSize={20}
             style={styles.balanceValueRow}
           />
-          <Text style={styles.balanceHint}>Ready for tonight&apos;s fixtures</Text>
         </View>
 
         <View style={styles.matchesSection}>
@@ -182,7 +182,6 @@ export default function HomeTab() {
                       ? "Live Matches"
                       : "Completed Matches"
                 }
-                count={visibleMatches.length}
               />
 
               {visibleMatches.length ? (
@@ -225,30 +224,51 @@ function FeaturedMatchCard({
     <Pressable style={styles.featuredCard} onPress={onOpen}>
       <View style={styles.featuredSummary}>
         <View style={styles.featuredSummaryBody}>
-          <Text style={styles.featuredSummaryTeams}>
+          <Text
+            style={styles.featuredSummaryTeams}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+          >
             {match.teamAShort} vs {match.teamBShort}
           </Text>
+          {match.venue ? (
+            <Text style={styles.featuredVenue}>
+              {match.venue}
+            </Text>
+          ) : null}
           {compact ? (
             <View style={styles.featuredSummaryMetaWrap}>
               <Text style={styles.featuredSummaryMeta}>
                 {getCollapsedScheduleLabel(match)}
               </Text>
-              <Text style={styles.featuredSummaryMeta}>{getBetLockTimeLabel(match)}</Text>
+              <LockTimeRow value={getBetLockTimeLabel(match)} />
             </View>
           ) : (
-            <Text style={styles.featuredSummaryMeta}>
-              {getCollapsedScheduleLabel(match)} | {getBetLockTimeLabel(match)}
-            </Text>
+            <View style={styles.featuredSummaryMetaInline}>
+              <Text style={styles.featuredSummaryMeta}>{getCollapsedScheduleLabel(match)}</Text>
+              <Text style={styles.featuredSummaryMetaDivider}>|</Text>
+              <LockTimeRow value={getBetLockTimeLabel(match)} />
+            </View>
           )}
         </View>
         <View style={styles.featuredSummarySide}>
           <Text style={styles.featuredMatchNumber}>Match {match.matchNumber}</Text>
           <StatusBadge label={badge.label} tone={badge.tone} compact />
           {prediction ? (
-            <Text style={styles.featuredBetHint}>
-              Your Bet: {prediction.amount.toLocaleString("en-IN")} coins |{" "}
-              {prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort}
-            </Text>
+            <View style={styles.featuredBetHintRow}>
+              <Text style={styles.featuredBetHint}>Your Bet:</Text>
+              <CoinAmount
+                value={prediction.amount.toLocaleString("en-IN")}
+                color="#AFC0DE"
+                size={12}
+                weight="700"
+                iconSize={10}
+              />
+              <Text style={styles.featuredBetHint}>
+                | {prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort}
+              </Text>
+            </View>
           ) : null}
         </View>
       </View>
@@ -317,15 +337,19 @@ function TeamBadge({ code, compact = false }: { code: string; compact?: boolean 
   );
 }
 
-function SectionHeader({ title, count }: { title: string; count: number }) {
+function LockTimeRow({ value }: { value: string }) {
+  return (
+    <View style={styles.lockTimeRow}>
+      <LockIcon />
+      <Text style={styles.featuredSummaryMeta}>{value}</Text>
+    </View>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeaderTitle}>{title}</Text>
-      <View style={styles.countChip}>
-        <Text style={styles.countChipText}>
-          {count} {count === 1 ? "Game" : "Games"}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -384,7 +408,10 @@ function getMatchBadge(match: MatchRecord, prediction: PredictionRecord | null =
   const bettingState = getBettingState(match);
 
   if (bettingState === "bet_open") {
-    return { label: prediction ? "Edit Bet" : "Bet Open", tone: "success" as const };
+    return {
+      label: prediction ? "Edit Bet" : "Bet Open",
+      tone: prediction ? ("edit" as const) : ("success" as const),
+    };
   }
 
   if (bettingState === "bet_locked") {
@@ -423,7 +450,7 @@ function getBetLockTimeLabel(match: MatchRecord) {
     timeZone: appTimeZone,
   }).format(new Date(match.lockAt));
 
-  return `Betting Locks : ${timeLabel}`;
+  return timeLabel;
 }
 
 function getCollapsedScheduleLabel(match: MatchRecord) {
@@ -485,7 +512,7 @@ function StatusBadge({
   compact = false,
 }: {
   label: string;
-  tone: "success" | "neutral" | "muted";
+  tone: "success" | "edit" | "neutral" | "muted";
   compact?: boolean;
 }) {
   return (
@@ -493,6 +520,7 @@ function StatusBadge({
       style={[
         styles.statusBadge,
         tone === "success" && styles.statusBadgeSuccess,
+        tone === "edit" && styles.statusBadgeEdit,
         tone === "neutral" && styles.statusBadgeNeutral,
         tone === "muted" && styles.statusBadgeMuted,
         compact && styles.statusBadgeCompact,
@@ -502,6 +530,7 @@ function StatusBadge({
         style={[
           styles.statusBadgeText,
           tone === "success" && styles.statusBadgeTextSuccess,
+          tone === "edit" && styles.statusBadgeTextEdit,
           tone === "neutral" && styles.statusBadgeTextNeutral,
           tone === "muted" && styles.statusBadgeTextMuted,
         ]}
@@ -577,11 +606,6 @@ const styles = StyleSheet.create({
   },
   balanceValueRow: {
     minHeight: 38,
-  },
-  balanceHint: {
-    color: "#7FA6FF",
-    fontSize: 14,
-    fontWeight: "600",
   },
   matchesSection: {
     gap: 18,
@@ -727,6 +751,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "800",
   },
+  featuredVenue: {
+    color: "#8FA5CC",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   featuredSummaryMeta: {
     color: "#A8B5D0",
     fontSize: 15,
@@ -734,6 +763,17 @@ const styles = StyleSheet.create({
   },
   featuredSummaryMetaWrap: {
     gap: 2,
+  },
+  featuredSummaryMetaInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  featuredSummaryMetaDivider: {
+    color: "#6F7F9F",
+    fontSize: 13,
+    fontWeight: "700",
   },
   featuredSummarySide: {
     alignSelf: "center",
@@ -752,6 +792,18 @@ const styles = StyleSheet.create({
     color: "#AFC0DE",
     fontSize: 12,
     fontWeight: "700",
+  },
+  featuredBetHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    flexWrap: "wrap",
+  },
+  lockTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   confirmationCard: {
     flexDirection: "row",
@@ -899,6 +951,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#103222",
     borderColor: "#1D6E49",
   },
+  statusBadgeEdit: {
+    backgroundColor: "#3A2E0D",
+    borderColor: "#B88A12",
+  },
   statusBadgeNeutral: {
     backgroundColor: "#18253F",
     borderColor: "#46597D",
@@ -914,6 +970,9 @@ const styles = StyleSheet.create({
   },
   statusBadgeTextSuccess: {
     color: "#3DDE8C",
+  },
+  statusBadgeTextEdit: {
+    color: "#FFD34F",
   },
   statusBadgeTextNeutral: {
     color: "#B7C4DE",

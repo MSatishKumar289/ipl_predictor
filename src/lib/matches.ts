@@ -21,7 +21,7 @@ import type { PredictionRecord } from "./prediction-types";
 import type { ReferralRecord } from "./referral-types";
 import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
-const MATCH_LOCK_MINUTES = 30;
+const MATCH_LOCK_MINUTES = 35;
 const BETTING_OPEN_HOURS = 24;
 const WIN_POINTS = 3;
 const SETTLEMENT_TRANSACTION_TYPES = new Set(["match_win_payout", "match_refund_no_result"]);
