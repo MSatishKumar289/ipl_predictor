@@ -9,6 +9,7 @@ export type MatchRecord = {
   teamBName: string;
   teamAShort: string;
   teamBShort: string;
+  venue?: string | null;
   startAt: string;
   lockAt: string;
   status: MatchStatus;
@@ -27,6 +28,7 @@ export type CreateMatchInput = {
   teamBName: string;
   teamAShort: string;
   teamBShort: string;
+  venue?: string | null;
   startAt: string;
   isEditableBeforeLock: boolean;
 };

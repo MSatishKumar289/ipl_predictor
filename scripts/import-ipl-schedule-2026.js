@@ -23,7 +23,7 @@ const {
   writeBatch,
 } = require("firebase/firestore");
 
-const MATCH_LOCK_MINUTES = 5;
+const MATCH_LOCK_MINUTES = 35;
 const SIGNUP_BONUS = 50000;
 const IN_QUERY_CHUNK = 10;
 
@@ -97,12 +97,15 @@ async function deleteOldPredictions(db, matchIds) {
   for (const ids of chunk(matchIds, IN_QUERY_CHUNK)) {
     const predictionsQuery = query(
       collection(db, "predictions"),
-      where("matchId", "in", ids)
+      where("matchId", "in", ids),
     );
     predictionSnapshots.push(await getDocs(predictionsQuery));
   }
 
-  const count = predictionSnapshots.reduce((sum, snapshot) => sum + snapshot.size, 0);
+  const count = predictionSnapshots.reduce(
+    (sum, snapshot) => sum + snapshot.size,
+    0,
+  );
   await deleteSnapshots(predictionSnapshots);
   return count;
 }
@@ -114,12 +117,15 @@ async function deleteOldTransactions(db, matchIds) {
     const transactionsQuery = query(
       collection(db, "transactions"),
       where("referenceType", "==", "match"),
-      where("referenceId", "in", ids)
+      where("referenceId", "in", ids),
     );
     transactionSnapshots.push(await getDocs(transactionsQuery));
   }
 
-  const count = transactionSnapshots.reduce((sum, snapshot) => sum + snapshot.size, 0);
+  const count = transactionSnapshots.reduce(
+    (sum, snapshot) => sum + snapshot.size,
+    0,
+  );
   await deleteSnapshots(transactionSnapshots);
   return count;
 }
@@ -132,7 +138,9 @@ async function deleteOldMatches(db, matchIds) {
 }
 
 async function resetNonAdminUsers(db) {
-  const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("createdAt")));
+  const usersSnapshot = await getDocs(
+    query(collection(db, "users"), orderBy("createdAt")),
+  );
   let updatedUsers = 0;
 
   for (const userSnapshot of usersSnapshot.docs) {
@@ -235,12 +243,13 @@ async function main() {
   loadEnvFile();
 
   const adminEmail = readArg("admin-email") || process.env.IMPORT_ADMIN_EMAIL;
-  const adminPassword = readArg("admin-password") || process.env.IMPORT_ADMIN_PASSWORD;
+  const adminPassword =
+    readArg("admin-password") || process.env.IMPORT_ADMIN_PASSWORD;
   const shouldResetUsers = hasFlag("reset-users");
 
   if (!adminEmail || !adminPassword) {
     throw new Error(
-      "Provide admin credentials with --admin-email=... --admin-password=... or set IMPORT_ADMIN_EMAIL and IMPORT_ADMIN_PASSWORD."
+      "Provide admin credentials with --admin-email=... --admin-password=... or set IMPORT_ADMIN_EMAIL and IMPORT_ADMIN_PASSWORD.",
     );
   }
 
@@ -249,7 +258,9 @@ async function main() {
     authDomain: getRequiredEnv("EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN"),
     projectId: getRequiredEnv("EXPO_PUBLIC_FIREBASE_PROJECT_ID"),
     storageBucket: getRequiredEnv("EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET"),
-    messagingSenderId: getRequiredEnv("EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"),
+    messagingSenderId: getRequiredEnv(
+      "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+    ),
     appId: getRequiredEnv("EXPO_PUBLIC_FIREBASE_APP_ID"),
   });
 
@@ -257,18 +268,26 @@ async function main() {
   const db = getFirestore(app);
 
   console.log("Signing in as admin...");
-  const credential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+  const credential = await signInWithEmailAndPassword(
+    auth,
+    adminEmail,
+    adminPassword,
+  );
   const adminUid = credential.user.uid;
 
   const adminProfileSnapshot = await getDoc(doc(db, "users", adminUid));
-  const adminProfile = adminProfileSnapshot.exists() ? adminProfileSnapshot.data() : null;
+  const adminProfile = adminProfileSnapshot.exists()
+    ? adminProfileSnapshot.data()
+    : null;
 
   if (adminProfile?.role !== "admin") {
     throw new Error("The provided account is not an admin user.");
   }
 
   console.log("Reading existing matches...");
-  const existingMatchesSnapshot = await getDocs(query(collection(db, "matches")));
+  const existingMatchesSnapshot = await getDocs(
+    query(collection(db, "matches")),
+  );
   const oldMatchIds = existingMatchesSnapshot.docs.map((entry) => entry.id);
 
   let deletedPredictions = 0;
@@ -276,7 +295,9 @@ async function main() {
   let deletedMatches = 0;
 
   if (oldMatchIds.length) {
-    console.log(`Deleting ${oldMatchIds.length} existing matches and related data...`);
+    console.log(
+      `Deleting ${oldMatchIds.length} existing matches and related data...`,
+    );
     deletedPredictions = await deleteOldPredictions(db, oldMatchIds);
     deletedTransactions = await deleteOldTransactions(db, oldMatchIds);
     deletedMatches = await deleteOldMatches(db, oldMatchIds);
@@ -304,8 +325,8 @@ async function main() {
         createdMatches,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 }
 

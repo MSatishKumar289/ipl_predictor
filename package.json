@@ -5,6 +5,8 @@
   "scripts": {
     "start": "expo start",
     "import-ipl-schedule-2026": "node ./scripts/import-ipl-schedule-2026.js",
+    "update-match-lock-times": "node ./scripts/update-match-lock-times.js",
+    "update-match-venues": "node ./scripts/update-match-venues.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

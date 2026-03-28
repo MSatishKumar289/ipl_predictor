@@ -79,7 +79,7 @@ export default function LeaderboardTab() {
                   Leaderboard
                 </Text>
                 <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-                  Ranked by points first, then wins, then fewer losses.
+                  Ranked by points first, then coin balance.
                 </Text>
               </View>
               <AppMenuButton onPress={() => setIsMenuOpen(true)} />

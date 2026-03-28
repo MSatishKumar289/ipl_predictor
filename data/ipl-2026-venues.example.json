@@ -1,0 +1,11 @@
+[
+  {
+    "matchNumber": 1,
+    "teamAName": "Royal Challengers Bengaluru",
+    "teamBName": "Sunrisers Hyderabad",
+    "teamAShort": "RCB",
+    "teamBShort": "SRH",
+    "startAt": "2026-03-28T19:30:00+05:30",
+    "venue": "Example Stadium, City"
+  }
+]
