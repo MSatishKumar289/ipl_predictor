@@ -17,7 +17,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   formatMatchDate,
@@ -27,6 +29,9 @@ import {
 } from "@/lib/matches";
 import {
   deletePrediction,
+  BET_STEP,
+  getMaximumAllowedBet,
+  MINIMUM_BET,
   placeOrEditPrediction,
   subscribeToMatchPredictions,
   subscribeToUserPrediction,
@@ -36,6 +41,92 @@ import type { PredictionSelection, PredictionRecord } from "@/lib/prediction-typ
 
 function teamLabel(match: MatchRecord, selection: PredictionSelection) {
   return selection === "teamA" ? match.teamAShort : match.teamBShort;
+}
+
+function getPredictionErrorConfig(message: string) {
+  if (message === "Profile missing" || message === "User profile not found.") {
+    return {
+      title: "Profile missing",
+      body: "Wait for profile sync and try again.",
+    };
+  }
+
+  if (message === "Enter a valid bet amount.") {
+    return {
+      title: "Invalid amount",
+      body: "Enter a valid bet amount.",
+    };
+  }
+
+  if (message.startsWith("Minimum bet is")) {
+    return {
+      title: "Minimum bet",
+      body: message,
+    };
+  }
+
+  if (message.startsWith("Bets must be in multiples of")) {
+    return {
+      title: "Invalid amount",
+      body: message,
+    };
+  }
+
+  if (message.startsWith("Maximum allowed bet is")) {
+    return {
+      title: "Bet limit reached",
+      body: message,
+    };
+  }
+
+  if (message === "Insufficient balance for this prediction.") {
+    return {
+      title: "Insufficient balance",
+      body: "Your current balance is too low for this bet amount.",
+    };
+  }
+
+  if (message === "Prediction editing is disabled for this match.") {
+    return {
+      title: "Editing disabled",
+      body: "This fixture no longer allows bet edits or deletions.",
+    };
+  }
+
+  if (message === "Predictions are locked for this match.") {
+    return {
+      title: "Match locked",
+      body: "Sorry, your bet could not be placed because betting is locked for this match.",
+      useToast: true,
+    };
+  }
+
+  if (message === "Betting opens 24 hours before the match starts.") {
+    return {
+      title: "Betting not open",
+      body: "Betting for this match opens 24 hours before the start time.",
+      useToast: true,
+    };
+  }
+
+  if (message === "Match not found.") {
+    return {
+      title: "Match unavailable",
+      body: "This match could not be found. Refresh and try again.",
+    };
+  }
+
+  if (message === "Prediction not found.") {
+    return {
+      title: "Bet not found",
+      body: "Your existing bet could not be found. Refresh and try again.",
+    };
+  }
+
+  return {
+    title: "Prediction failed",
+    body: message,
+  };
 }
 
 export default function MatchDetailScreen() {
@@ -149,6 +240,8 @@ export default function MatchDetailScreen() {
   const isEditMode = !prediction || isEditingPrediction;
   const inputsEditable = canEdit && isEditMode;
   const isDesktop = width >= 1024;
+  const availableBalance = (profile?.balance ?? 0) + (prediction?.amount ?? 0);
+  const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
 
   const resultLabel = useMemo(() => {
     if (!match?.winner) {
@@ -204,14 +297,43 @@ export default function MatchDetailScreen() {
   function validatePredictionInput() {
     const parsedAmount = Number(amount);
 
-    if (!profile) {
-      Alert.alert("Profile missing", "Wait for profile sync and try again.");
+    function rejectValidation(message: string, resetInput = false) {
+      const config = getPredictionErrorConfig(message);
+      if (resetInput) {
+        setAmount("");
+      }
+      setToastMessage(config.body);
       return null;
     }
 
+    if (!profile) {
+      return rejectValidation("Profile missing");
+    }
+
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert("Invalid amount", "Enter a valid bet amount.");
-      return null;
+      return rejectValidation("Enter a valid bet amount.");
+    }
+
+    if (parsedAmount < MINIMUM_BET) {
+      return rejectValidation(`Minimum bet is ${MINIMUM_BET} coins.`);
+    }
+
+    if (parsedAmount % BET_STEP !== 0) {
+      return rejectValidation(`Bets must be in multiples of ${BET_STEP} coins.`);
+    }
+
+    const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
+
+    if (maximumAllowedBet !== null && parsedAmount > maximumAllowedBet) {
+      return rejectValidation(
+        `Maximum allowed bet is ${maximumAllowedBet.toLocaleString("en-IN")} coins for your current balance tier. Bets must also be in multiples of ${BET_STEP} coins.`
+        ,
+        true
+      );
+    }
+
+    if (parsedAmount > availableBalance) {
+      return rejectValidation("Insufficient balance for this prediction.", true);
     }
 
     return parsedAmount;
@@ -246,8 +368,6 @@ export default function MatchDetailScreen() {
     setIsSubmitting(true);
 
     try {
-      const isEditingPrediction = !!prediction;
-
       await placeOrEditPrediction({
         match: currentMatch,
         userId: currentUserId,
@@ -260,21 +380,15 @@ export default function MatchDetailScreen() {
       router.replace("/(tabs)/my-bets");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save prediction.";
+      const config = getPredictionErrorConfig(message);
 
-      if (
-        message === "Predictions are locked for this match." ||
-        message === "Betting opens 24 hours before the match starts."
-      ) {
+      if (config.useToast) {
         setIsConfirmVisible(false);
-        setToastMessage(
-          message === "Predictions are locked for this match."
-            ? "Sorry, your bet could not be placed as the match was locked."
-            : "Betting for this match opens 24 hours before the start time."
-        );
+        setToastMessage(config.body);
         return;
       }
 
-      Alert.alert("Prediction failed", message);
+      Alert.alert(config.title, config.body);
     } finally {
       setIsSubmitting(false);
     }
@@ -298,7 +412,15 @@ export default function MatchDetailScreen() {
       setIsDeleteConfirmVisible(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to delete your bet.";
-      Alert.alert("Delete failed", message);
+      const config = getPredictionErrorConfig(message);
+
+      if (config.useToast) {
+        setIsDeleteConfirmVisible(false);
+        setToastMessage(config.body);
+        return;
+      }
+
+      Alert.alert(config.title, config.body);
     } finally {
       setIsDeleting(false);
     }
@@ -306,6 +428,28 @@ export default function MatchDetailScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title={`${currentMatch.teamAShort} vs ${currentMatch.teamBShort}`}
+          leftSlot={
+            <Pressable
+              style={styles.backButton}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                  return;
+                }
+
+                router.replace("/(tabs)/home");
+              }}
+            >
+              <BackIcon />
+            </Pressable>
+          }
+          edgeToEdge
+        />
+      </View>
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -316,22 +460,6 @@ export default function MatchDetailScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-            <View style={styles.headerRow}>
-              <Pressable
-                style={styles.backButton}
-                onPress={() => {
-                  if (router.canGoBack()) {
-                    router.back();
-                    return;
-                  }
-
-                  router.replace("/(tabs)/home");
-                }}
-              >
-                <BackIcon />
-              </Pressable>
-            </View>
-
             {matchError ? (
               <View style={styles.errorCard}>
                 <Text style={styles.errorTitle}>Firestore error</Text>
@@ -419,6 +547,14 @@ export default function MatchDetailScreen() {
                   editable={inputsEditable}
                   onChangeText={(value) => setAmount(value.replace(/[^0-9]/g, ""))}
                 />
+
+                {inputsEditable ? (
+                  <Text style={styles.helperText}>
+                    {maximumAllowedBet !== null
+                      ? `Max allowed for you: ${maximumAllowedBet.toLocaleString("en-IN")} coins. Bets above 20,000 balance are capped at 50%, and above 10,000 at 70%.`
+                      : `Min bet is ${MINIMUM_BET} coins in multiples of ${BET_STEP}.`}
+                  </Text>
+                ) : null}
 
                 {prediction ? (
                   <Text style={styles.statusTextInline}>
@@ -690,7 +826,7 @@ export default function MatchDetailScreen() {
       </Modal>
 
       {toastMessage ? (
-        <View style={[styles.toastWrap, styles.toastNoPointerEvents]}>
+        <View style={[styles.toastWrap, styles.toastTop, styles.toastNoPointerEvents]}>
           <View style={styles.toastCard}>
             <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
@@ -728,19 +864,21 @@ function ConfirmRow({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#07152E",
+    backgroundColor: "#0C1A34",
   },
   keyboardWrap: {
     flex: 1,
   },
   content: {
-    padding: 18,
-    paddingTop: 48,
+    paddingHorizontal: 18,
     gap: 18,
+    paddingTop: 14,
   },
   contentDesktop: {
-    paddingTop: 28,
     paddingBottom: 40,
+  },
+  topBannerWrap: {
+    marginHorizontal: -18,
   },
   pageShell: {
     width: "100%",
@@ -751,19 +889,15 @@ const styles = StyleSheet.create({
     maxWidth: 920,
     gap: 24,
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   backButton: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#102042",
+    backgroundColor: "#152747",
     borderWidth: 1,
-    borderColor: "#223A63",
+    borderColor: "#355586",
   },
   loadingState: {
     flex: 1,
@@ -823,8 +957,8 @@ const styles = StyleSheet.create({
   heroCard: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#102042",
+    borderColor: "#315585",
+    backgroundColor: "#173055",
     padding: 20,
     gap: 8,
   },
@@ -858,8 +992,8 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#102042",
+    borderColor: "#315585",
+    backgroundColor: "#173055",
     padding: 16,
     gap: 10,
   },
@@ -892,8 +1026,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#334C76",
-    backgroundColor: "#0E1B36",
+    borderColor: "#3F6292",
+    backgroundColor: "#19325A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -912,8 +1046,8 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#334C76",
-    backgroundColor: "#162645",
+    borderColor: "#3F6292",
+    backgroundColor: "#1D3761",
     paddingHorizontal: 14,
     height: 50,
     color: "#F7FAFF",
@@ -924,6 +1058,11 @@ const styles = StyleSheet.create({
   },
   statusTextInline: {
     color: "#9FB0CF",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  helperText: {
+    color: "#8FA5CC",
     fontSize: 13,
     lineHeight: 18,
   },
@@ -964,8 +1103,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#102042",
+    borderColor: "#315585",
+    backgroundColor: "#173055",
     padding: 22,
     gap: 14,
     justifyContent: "center",
@@ -1007,8 +1146,8 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#0E1B36",
+    borderColor: "#315585",
+    backgroundColor: "#19325A",
     padding: 14,
   },
   publicRowCurrentUser: {
@@ -1046,8 +1185,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#101A31",
+    borderColor: "#315585",
+    backgroundColor: "#173055",
     paddingHorizontal: 24,
     paddingTop: 14,
     paddingBottom: 28,
@@ -1093,8 +1232,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#314765",
-    backgroundColor: "#16233F",
+    borderColor: "#3C5C8D",
+    backgroundColor: "#1A345D",
     padding: 18,
     gap: 16,
   },
@@ -1195,8 +1334,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 16,
     right: 16,
-    bottom: 24,
     alignItems: "center",
+  },
+  toastTop: {
+    top: 72,
   },
   toastNoPointerEvents: {
     pointerEvents: "none",

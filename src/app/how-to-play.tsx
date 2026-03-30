@@ -3,7 +3,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { howToPlaySections as sections } from "@/lib/how-to-play-content";
 
 export default function HowToPlayScreen() {
@@ -11,22 +13,20 @@ export default function HowToPlayScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title="How to Play"
+          leftSlot={<BackButton fallbackHref="/(tabs)/home" />}
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          edgeToEdge
+        />
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.pageShell}>
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <BackButton fallbackHref="/(tabs)/home" />
-              <View style={styles.headerTextWrap}>
-                <Text style={styles.eyebrow}>Menu</Text>
-                <Text style={styles.title}>How to Play</Text>
-              </View>
-              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
-            </View>
-            <Text style={styles.subtitle}>
-              Rules, betting flow, and the basics of how this league works.
-            </Text>
-          </View>
-
           {sections.map((section) => (
             <View key={section.title} style={styles.card}>
               <Text style={styles.cardTitle}>{section.title}</Text>
@@ -54,45 +54,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 24,
-    paddingTop: 36,
+    paddingHorizontal: 24,
     paddingBottom: 40,
+    paddingTop: 14,
+  },
+  topBannerWrap: {
+    marginHorizontal: -24,
   },
   pageShell: {
     width: "100%",
     maxWidth: 960,
     alignSelf: "center",
     gap: 18,
-  },
-  header: {
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 6,
-  },
-  eyebrow: {
-    color: "#3F7DFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: "#F5F8FF",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#8EA0C1",
-    fontSize: 16,
-    lineHeight: 24,
-    paddingRight: 8,
   },
   card: {
     borderRadius: 24,

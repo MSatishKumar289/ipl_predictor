@@ -3,7 +3,6 @@ import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -17,6 +16,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppScreenBackground } from "@/components/AppScreenBackground";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { signInWithPhone, signUpWithPhone } from "@/lib/auth";
 import { validateReferralForSignup } from "@/lib/referrals";
 import { useAuth } from "@/providers/AuthProvider";
@@ -168,6 +169,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <AppScreenBackground />
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -177,17 +179,11 @@ export default function HomeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-            <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-            <View style={styles.header}>
-              <View style={styles.logoBox}>
-                <Image
-                  source={require("../../assets/images/Background.png")}
-                  style={styles.logoImage}
-                  resizeMode="cover"
-                />
-              </View>
-              <Text style={[styles.title, isDesktop && styles.titleDesktop]}>FPL</Text>
-            </View>
+          <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
+            <StickyHeaderBar
+              title="FPL"
+              centered
+            />
 
             <View style={styles.authContent}>
               <View style={styles.modeRow}>
@@ -395,7 +391,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 18,
-    paddingTop: 72,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   scrollContentDesktop: {
@@ -424,27 +420,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  logoBox: {
-    width: 116,
-    height: 116,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    shadowColor: "#000000",
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 10,
-  },
-  logoImage: {
-    width: "100%",
-    height: "100%",
-  },
   title: {
     color: "#F5F7FB",
     fontSize: 46,
@@ -470,6 +445,7 @@ const styles = StyleSheet.create({
   },
   authContent: {
     paddingHorizontal: 2,
+    marginTop: 18,
   },
   modeRow: {
     flexDirection: "row",

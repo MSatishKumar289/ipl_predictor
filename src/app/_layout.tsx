@@ -81,7 +81,7 @@ function AuthGate() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: "#0A1325" },
+          contentStyle: { backgroundColor: "#102043" },
         }}
       />
       <QuickRulesWidget
@@ -97,7 +97,7 @@ function AuthGate() {
 const styles = {
   loadingScreen: {
     flex: 1,
-    backgroundColor: "#0A1325",
+    backgroundColor: "#102043",
     alignItems: "center" as const,
     justifyContent: "center" as const,
     gap: 16,

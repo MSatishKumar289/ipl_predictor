@@ -10,8 +10,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
 import { CoinAmount } from "@/components/CoinAmount";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import {
   REFERRAL_REWARD_AMOUNT,
   getReferralStatusLabel,
@@ -175,22 +177,20 @@ export default function MyReferralsScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title="My Referrals"
+          leftSlot={<BackButton fallbackHref="/(tabs)/home" />}
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          edgeToEdge
+        />
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.pageShell}>
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <BackButton fallbackHref="/(tabs)/home" />
-              <View style={styles.headerTextWrap}>
-                <Text style={styles.eyebrow}>Menu</Text>
-                <Text style={styles.title}>My Referrals</Text>
-              </View>
-              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
-            </View>
-            <Text style={styles.subtitle}>
-              Track sent referrals, signup progress, and bonus credit status.
-            </Text>
-          </View>
-
           <View style={styles.summaryWrap}>
             <View style={styles.summaryRow}>
               <SummaryCard label="Total" value={String(totals.total)} accent />
@@ -216,7 +216,6 @@ export default function MyReferralsScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
-
           <View style={styles.tableWrap}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View>
@@ -227,24 +226,23 @@ export default function MyReferralsScreen() {
                   <Text style={[styles.tableHeaderText, styles.rewardCol]}>Bonus</Text>
                   <Text style={[styles.tableHeaderText, styles.dateCol]}>Date Time</Text>
                 </View>
-
-                {isLoading ? (
-                  <View style={styles.loadingState}>
-                    <ActivityIndicator size="large" color="#2463EB" />
-                    <Text style={styles.loadingText}>Loading referrals...</Text>
-                  </View>
-                ) : referrals.length ? (
-                  referrals.map((referral) => (
-                    <ReferralRow key={referral.id} referral={referral} isCompact={isCompact} />
-                  ))
-                ) : (
-                  <View style={styles.emptyRow}>
-                    <Text style={styles.emptyTitle}>No referrals sent yet</Text>
-                    <Text style={styles.emptyText}>
-                      Referred users and their bonus status will appear here automatically.
-                    </Text>
-                  </View>
-                )}
+              {isLoading ? (
+                <View style={styles.loadingState}>
+                  <ActivityIndicator size="large" color="#2463EB" />
+                  <Text style={styles.loadingText}>Loading referrals...</Text>
+                </View>
+              ) : referrals.length ? (
+                referrals.map((referral) => (
+                  <ReferralRow key={referral.id} referral={referral} isCompact={isCompact} />
+                ))
+              ) : (
+                <View style={styles.emptyRow}>
+                  <Text style={styles.emptyTitle}>No referrals sent yet</Text>
+                  <Text style={styles.emptyText}>
+                    Referred users and their bonus status will appear here automatically.
+                  </Text>
+                </View>
+              )}
               </View>
             </ScrollView>
           </View>
@@ -287,45 +285,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 18,
-    paddingTop: 36,
+    paddingHorizontal: 18,
     paddingBottom: 40,
+    paddingTop: 14,
+  },
+  topBannerWrap: {
+    marginHorizontal: -18,
   },
   pageShell: {
     width: "100%",
     maxWidth: 1120,
     alignSelf: "center",
     gap: 22,
-  },
-  header: {
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 6,
-  },
-  eyebrow: {
-    color: "#3F7DFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: "#F5F8FF",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#8EA0C1",
-    fontSize: 16,
-    lineHeight: 24,
-    paddingRight: 8,
   },
   summaryWrap: {
     gap: 12,
@@ -388,6 +359,8 @@ const styles = StyleSheet.create({
   },
   tableWrap: {
     borderRadius: 24,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",
@@ -396,12 +369,12 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingVertical: 14,
     backgroundColor: "#132445",
     borderBottomWidth: 1,
     borderBottomColor: "#223A63",
-    gap: 12,
+    gap: 8,
   },
   tableHeaderCompact: {
     paddingHorizontal: 14,
@@ -417,11 +390,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     minHeight: 74,
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#1A2B4B",
-    gap: 12,
+    gap: 8,
   },
   rowCompact: {
     minHeight: 68,
@@ -429,19 +402,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   nameCol: {
-    width: 180,
+    width: 150,
   },
   mobileCol: {
-    width: 130,
+    width: 116,
   },
   statusCol: {
-    width: 170,
+    width: 134,
   },
   rewardCol: {
-    width: 110,
+    width: 88,
   },
   dateCol: {
-    width: 130,
+    width: 114,
   },
   cellText: {
     color: "#F1F5FF",

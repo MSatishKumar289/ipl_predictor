@@ -23,9 +23,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#102042",
+    backgroundColor: "#152747",
     borderWidth: 1,
-    borderColor: "#223A63",
+    borderColor: "#355586",
     marginTop: 2,
   },
 });
