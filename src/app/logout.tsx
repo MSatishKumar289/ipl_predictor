@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppScreenBackground } from "@/components/AppScreenBackground";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { logout } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -63,7 +65,14 @@ export default function LogoutScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.card}>
+      <AppScreenBackground />
+      <View style={styles.pageShell}>
+        <StickyHeaderBar
+          title="Logout"
+          centered
+        />
+
+        <View style={styles.card}>
         {status === "preparing" ? (
           <>
             <ActivityIndicator size="large" color="#1E5AE0" />
@@ -95,6 +104,7 @@ export default function LogoutScreen() {
             </Pressable>
           </>
         ) : null}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -104,9 +114,13 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#0A1325",
+    padding: 24,
+  },
+  pageShell: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    gap: 18,
   },
   card: {
     width: "100%",

@@ -11,8 +11,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
 import { CoinAmount } from "@/components/CoinAmount";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { db } from "@/lib/firebase";
 import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
@@ -146,22 +148,20 @@ export default function TransactionsScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title="Transactions"
+          leftSlot={<BackButton fallbackHref="/(tabs)/home" />}
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          edgeToEdge
+        />
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.pageShell}>
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <BackButton fallbackHref="/(tabs)/home" />
-              <View style={styles.headerTextWrap}>
-                <Text style={styles.eyebrow}>Menu</Text>
-                <Text style={styles.title}>Transactions</Text>
-              </View>
-              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
-            </View>
-            <Text style={styles.subtitle}>
-              Wallet credits, debits, and bet-related account movement.
-            </Text>
-          </View>
-
           {error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
@@ -225,7 +225,6 @@ export default function TransactionsScreen() {
                 Date
               </Text>
             </View>
-
             {isLoading ? (
               <View style={styles.loadingState}>
                 <ActivityIndicator size="large" color="#2463EB" />
@@ -452,45 +451,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 18,
-    paddingTop: 36,
+    paddingHorizontal: 18,
     paddingBottom: 40,
+    paddingTop: 14,
+  },
+  topBannerWrap: {
+    marginHorizontal: -18,
   },
   pageShell: {
     width: "100%",
     maxWidth: 1120,
     alignSelf: "center",
     gap: 22,
-  },
-  header: {
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 6,
-  },
-  eyebrow: {
-    color: "#3F7DFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: "#F5F8FF",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#8EA0C1",
-    fontSize: 16,
-    lineHeight: 24,
-    paddingRight: 8,
   },
   errorCard: {
     borderRadius: 18,
@@ -570,6 +542,8 @@ const styles = StyleSheet.create({
   },
   tableWrap: {
     borderRadius: 24,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderWidth: 1,
     borderColor: "#223A63",
     backgroundColor: "#102042",

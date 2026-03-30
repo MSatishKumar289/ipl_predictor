@@ -14,12 +14,12 @@ import { isBettingOpen } from "./matches";
 import type { MatchRecord } from "./match-types";
 import type { PredictionRecord, PredictionSelection } from "./prediction-types";
 
-const MINIMUM_BET = 100;
-const BET_STEP = 100;
-const SEVENTY_PERCENT_RESTRICTION_THRESHOLD = 10000;
-const FIFTY_PERCENT_RESTRICTION_THRESHOLD = 20000;
+export const MINIMUM_BET = 100;
+export const BET_STEP = 100;
+export const SEVENTY_PERCENT_RESTRICTION_THRESHOLD = 10000;
+export const FIFTY_PERCENT_RESTRICTION_THRESHOLD = 20000;
 
-function getMaximumAllowedBet(availableBalance: number) {
+export function getMaximumAllowedBet(availableBalance: number) {
   if (availableBalance <= SEVENTY_PERCENT_RESTRICTION_THRESHOLD) {
     return null;
   }

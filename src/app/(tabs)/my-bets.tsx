@@ -12,7 +12,9 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -158,26 +160,20 @@ export default function MyBetsTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title="My Bets"
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          centered={isDesktop}
+          edgeToEdge
+        />
+      </View>
       <ScrollView
         contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-          <View style={[styles.header, isDesktop && styles.headerDesktop]}>
-            <View style={[styles.headerTopRow, isDesktop && styles.headerTopRowDesktop]}>
-              <View style={styles.headerTextWrap}>
-                <Text style={[styles.eyebrow, isDesktop && styles.headerTextDesktop]}>
-                  Bet History
-                </Text>
-                <Text style={[styles.title, isDesktop && styles.headerTextDesktop]}>My Bets</Text>
-                <Text style={[styles.subtitle, isDesktop && styles.headerTextDesktop]}>
-                  Track active picks, settled outcomes, and totals across matches.
-                </Text>
-              </View>
-              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
-            </View>
-          </View>
-
           {error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
@@ -443,13 +439,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 18,
-    paddingTop: 36,
+    paddingHorizontal: 18,
     paddingBottom: 40,
-    gap: 18,
+    paddingTop: 14,
   },
   contentDesktop: {
-    paddingTop: 28,
+  },
+  topBannerWrap: {
+    marginHorizontal: -18,
   },
   pageShell: {
     width: "100%",
@@ -471,46 +468,6 @@ const styles = StyleSheet.create({
     color: "#D8E3FF",
     fontSize: 16,
     fontWeight: "600",
-  },
-  header: {
-    gap: 8,
-  },
-  headerTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  headerTopRowDesktop: {
-    width: "100%",
-    maxWidth: 720,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 8,
-  },
-  headerDesktop: {
-    alignItems: "center",
-  },
-  headerTextDesktop: {
-    textAlign: "center",
-  },
-  eyebrow: {
-    color: "#3F7DFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: "#F5F8FF",
-    fontSize: 32,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#8EA0C1",
-    fontSize: 16,
-    lineHeight: 24,
   },
   errorCard: {
     borderRadius: 18,

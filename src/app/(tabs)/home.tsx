@@ -12,8 +12,10 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
 import { LockIcon } from "@/components/LockIcon";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
@@ -97,109 +99,99 @@ export default function HomeTab() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          eyebrow="FPL"
+          title={`Welcome back, ${profile?.displayName || "Player"}`}
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          edgeToEdge
+        />
+      </View>
       <ScrollView
         contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroTextWrap}>
-              <Text style={styles.eyebrow}>FPL</Text>
-              <Text style={styles.title}>Welcome back, {profile?.displayName || "Player"}</Text>
-              <Text style={styles.subtitle}>Track fixtures, place picks, and follow standings.</Text>
-            </View>
-            <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+        <View style={styles.pageShell}>
+          <View style={styles.balanceCard}>
+            <Text style={styles.cardLabel}>Current Balance</Text>
+            <CoinAmount
+              value={(profile?.balance ?? 0).toLocaleString("en-IN")}
+              size={30}
+              weight="800"
+              iconSize={20}
+              style={styles.balanceValueRow}
+            />
           </View>
-        </View>
 
-        <View style={styles.balanceCard}>
-          <Text style={styles.cardLabel}>Current Balance</Text>
-          <CoinAmount
-            value={(profile?.balance ?? 0).toLocaleString("en-IN")}
-            size={30}
-            weight="800"
-            iconSize={20}
-            style={styles.balanceValueRow}
-          />
-        </View>
+          <View style={styles.matchesSection}>
+            <View style={styles.matchesHeader}>
+              <Text style={styles.matchesTitle}>Matches</Text>
+              {isLoadingMatches ? (
+                <View style={styles.loadingChip}>
+                  <ActivityIndicator size="small" color="#F2B84B" />
+                  <Text style={styles.loadingChipText}>Loading</Text>
+                </View>
+              ) : (
+                <View style={styles.countChip}>
+                  <Text style={styles.countChipText}>
+                    {activeMatches.length} {activeMatches.length === 1 ? "Game" : "Games"}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-        <View style={styles.matchesSection}>
-          <View style={styles.matchesHeader}>
-            <Text style={styles.matchesTitle}>Matches</Text>
-            {isLoadingMatches ? (
-              <View style={styles.loadingChip}>
-                <ActivityIndicator size="small" color="#7FA6FF" />
-                <Text style={styles.loadingChipText}>Loading</Text>
+            <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
+              {filters.map((filter) => (
+                <Pressable
+                  key={filter.key}
+                  style={[styles.filterItem, isDesktop && styles.filterItemDesktop]}
+                  onPress={() => setActiveFilter(filter.key)}
+                >
+                  <Text
+                    style={[
+                      styles.filterLabel,
+                      activeFilter === filter.key && styles.filterLabelActive,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                  {activeFilter === filter.key ? <View style={styles.filterUnderline} /> : null}
+                </Pressable>
+              ))}
+            </View>
+
+            {error ? (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorTitle}>Firestore error</Text>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {isLoadingMatches || !isClientReady ? (
+              <View style={styles.sectionLoadingState}>
+                <ActivityIndicator size="large" color="#F2B84B" />
+                <Text style={styles.sectionLoadingText}>Loading matches...</Text>
               </View>
             ) : (
-              <View style={styles.countChip}>
-                <Text style={styles.countChipText}>
-                  {activeMatches.length} {activeMatches.length === 1 ? "Game" : "Games"}
-                </Text>
-              </View>
+              <>
+                {visibleMatches.length ? (
+                  <View style={styles.featuredList}>
+                    {visibleMatches.map((match) => (
+                      <FeaturedMatchCard
+                        key={match.id}
+                        match={match}
+                        prediction={predictions[match.id] ?? null}
+                        compact={width < 768}
+                        onOpen={() => openMatch(match.id)}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+                {!visibleMatches.length ? <EmptyState filter={activeFilter} /> : null}
+              </>
             )}
           </View>
-
-          <View style={[styles.filterRow, isDesktop && styles.filterRowDesktop]}>
-            {filters.map((filter) => (
-              <Pressable
-                key={filter.key}
-                style={[styles.filterItem, isDesktop && styles.filterItemDesktop]}
-                onPress={() => setActiveFilter(filter.key)}
-              >
-                <Text
-                  style={[
-                    styles.filterLabel,
-                    activeFilter === filter.key && styles.filterLabelActive,
-                  ]}
-                >
-                  {filter.label}
-                </Text>
-                {activeFilter === filter.key ? <View style={styles.filterUnderline} /> : null}
-              </Pressable>
-            ))}
-          </View>
-
-          {error ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorTitle}>Firestore error</Text>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : null}
-
-          {isLoadingMatches || !isClientReady ? (
-            <View style={styles.sectionLoadingState}>
-              <ActivityIndicator size="large" color="#2463EB" />
-              <Text style={styles.sectionLoadingText}>Loading matches...</Text>
-            </View>
-          ) : (
-            <>
-              <SectionHeader
-                title={
-                  activeFilter === "upcoming"
-                    ? "Upcoming Matches"
-                    : activeFilter === "live"
-                      ? "Live Matches"
-                      : "Completed Matches"
-                }
-              />
-
-              {visibleMatches.length ? (
-                <View style={styles.featuredList}>
-                  {visibleMatches.map((match) => (
-                    <FeaturedMatchCard
-                      key={match.id}
-                      match={match}
-                      prediction={predictions[match.id] ?? null}
-                      compact={width < 768}
-                      onOpen={() => openMatch(match.id)}
-                    />
-                  ))}
-                  </View>
-              ) : null}
-              {!visibleMatches.length ? <EmptyState filter={activeFilter} /> : null}
-            </>
-          )}
         </View>
       </ScrollView>
       <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
@@ -276,80 +268,11 @@ function FeaturedMatchCard({
   );
 }
 
-function CompactMatchRow({
-  match,
-  prediction,
-  onOpen,
-}: {
-  match: MatchRecord;
-  prediction: PredictionRecord | null;
-  onOpen: () => void;
-}) {
-  const badge = getMatchBadge(match, prediction);
-
-  return (
-    <View style={styles.rowCard}>
-      <View style={styles.rowLeading}>
-        <TeamBadge code={match.teamAShort} compact />
-        <TeamBadge code={match.teamBShort} compact />
-      </View>
-
-      <View style={styles.rowBody}>
-        <View style={styles.rowTop}>
-          <Text style={styles.rowTitle}>
-            {match.teamAShort} vs {match.teamBShort}
-          </Text>
-          <Text style={styles.rowDay}>{getRelativeDayLabel(match)}</Text>
-        </View>
-        <Text style={styles.rowSubtitle}>
-          {match.teamAName} vs {match.teamBName}
-        </Text>
-        {prediction ? (
-          <ConfirmationBlock
-            compact
-            title="Prediction Confirmed"
-            detail={`Picked ${
-              prediction.selectedTeam === "teamA" ? match.teamAShort : match.teamBShort
-            } - ${prediction.amount.toLocaleString("en-IN")} coins`}
-          />
-        ) : match.winner ? (
-          <Text style={styles.rowPrediction}>{getWinnerSummary(match)}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.rowActions}>
-        <StatusBadge label={badge.label} tone={badge.tone} compact />
-        <Pressable onPress={onOpen}>
-          <Text style={styles.rowLink}>
-            {match.status === "settled" || match.status === "no_result" ? "Stats" : "View"}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function TeamBadge({ code, compact = false }: { code: string; compact?: boolean }) {
-  return (
-    <View style={[styles.teamBadge, compact && styles.teamBadgeCompact]}>
-      <Text style={[styles.teamCode, compact && styles.teamCodeCompact]}>{code}</Text>
-    </View>
-  );
-}
-
 function LockTimeRow({ value }: { value: string }) {
   return (
     <View style={styles.lockTimeRow}>
       <LockIcon />
       <Text style={styles.featuredSummaryMeta}>{value}</Text>
-    </View>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderTitle}>{title}</Text>
     </View>
   );
 }
@@ -366,30 +289,6 @@ function EmptyState({ filter }: { filter: MatchFilter }) {
     <View style={styles.emptyCard}>
       <Text style={styles.emptyTitle}>{message}</Text>
       <Text style={styles.emptyText}>New match activity will appear here automatically.</Text>
-    </View>
-  );
-}
-
-function ConfirmationBlock({
-  title,
-  detail,
-  compact = false,
-}: {
-  title: string;
-  detail: string;
-  compact?: boolean;
-}) {
-  return (
-    <View style={[styles.confirmationCard, compact && styles.confirmationCardCompact]}>
-      <View style={styles.confirmationDot} />
-      <View style={styles.confirmationBody}>
-        <Text style={[styles.confirmationTitle, compact && styles.confirmationTitleCompact]}>
-          {title}
-        </Text>
-        <Text style={[styles.confirmationText, compact && styles.confirmationTextCompact]}>
-          {detail}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -425,24 +324,6 @@ function getMatchBadge(match: MatchRecord, prediction: PredictionRecord | null =
   return { label: "Completed", tone: "muted" as const };
 }
 
-function getWinnerLabel(match: MatchRecord) {
-  if (match.winner === "teamA") {
-    return match.teamAShort;
-  }
-
-  if (match.winner === "teamB") {
-    return match.teamBShort;
-  }
-
-  return "No result";
-}
-
-function getWinnerSummary(match: MatchRecord) {
-  return match.winner === "no_result"
-    ? `Match ${match.matchNumber} ended with no result`
-    : `${getWinnerLabel(match)} won match ${match.matchNumber}`;
-}
-
 function getBetLockTimeLabel(match: MatchRecord) {
   const timeLabel = new Intl.DateTimeFormat("en-IN", {
     hour: "numeric",
@@ -461,42 +342,6 @@ function getCollapsedScheduleLabel(match: MatchRecord) {
     minute: "2-digit",
     timeZone: appTimeZone,
   }).format(new Date(match.startAt));
-}
-
-function getRelativeDayLabel(match: MatchRecord) {
-  const target = new Date(match.startAt);
-  const today = new Date();
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: appTimeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const targetParts = formatter.formatToParts(target);
-  const todayParts = formatter.formatToParts(today);
-  const targetDate = `${targetParts.find((part) => part.type === "year")?.value}-${targetParts.find((part) => part.type === "month")?.value}-${targetParts.find((part) => part.type === "day")?.value}`;
-  const todayDate = `${todayParts.find((part) => part.type === "year")?.value}-${todayParts.find((part) => part.type === "month")?.value}-${todayParts.find((part) => part.type === "day")?.value}`;
-  const startOfToday = new Date(`${todayDate}T00:00:00Z`).getTime();
-  const startOfTarget = new Date(`${targetDate}T00:00:00Z`).getTime();
-  const dayOffset = Math.round((startOfTarget - startOfToday) / (24 * 60 * 60 * 1000));
-
-  if (dayOffset === 0) {
-    return "Today";
-  }
-
-  if (dayOffset === 1) {
-    return "Tomorrow";
-  }
-
-  if (dayOffset === -1) {
-    return "Yesterday";
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    timeZone: appTimeZone,
-  }).format(target);
 }
 
 function openMatch(matchId: string) {
@@ -544,60 +389,35 @@ function StatusBadge({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#07152E",
+    backgroundColor: "#0C1A34",
   },
   content: {
-    padding: 18,
-    paddingTop: 28,
+    paddingHorizontal: 18,
     paddingBottom: 40,
-    gap: 18,
+    paddingTop: 14,
     width: "100%",
     alignSelf: "center",
   },
   contentDesktop: {
     maxWidth: 960,
   },
-  hero: {
-    gap: 8,
+  topBannerWrap: {
+    marginHorizontal: -18,
   },
-  heroTopRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  heroTextWrap: {
-    flex: 1,
-    gap: 8,
-  },
-  eyebrow: {
-    color: "#1E5AE0",
-    fontSize: 15,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  title: {
-    color: "#F5F7FB",
-    fontSize: 32,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#93A1BC",
-    fontSize: 16,
-    lineHeight: 24,
+  pageShell: {
+    gap: 18,
   },
   balanceCard: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#21406E",
-    backgroundColor: "#102042",
+    borderColor: "#233C62",
+    backgroundColor: "#15294F",
     padding: 22,
     gap: 8,
   },
   cardLabel: {
     color: "#9FB0CF",
-    fontSize: 16,
+    fontSize: 14,
   },
   balanceValue: {
     color: "#F7FAFF",
@@ -618,7 +438,7 @@ const styles = StyleSheet.create({
   },
   matchesTitle: {
     color: "#F7FAFF",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
   },
   loadingChip: {
@@ -626,7 +446,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderRadius: 999,
-    backgroundColor: "#102A63",
+    backgroundColor: "#17315B",
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
@@ -637,8 +457,10 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1B2943",
+    borderBottomWidth: 2,
+    borderBottomColor: "#46628F",
+    paddingBottom: 2,
+    marginBottom: 8,
   },
   filterRowDesktop: {
     alignSelf: "flex-start",
@@ -675,8 +497,8 @@ const styles = StyleSheet.create({
     gap: 14,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#223A63",
-    backgroundColor: "#102042",
+    borderColor: "#27466E",
+    backgroundColor: "#162B54",
     padding: 28,
   },
   sectionLoadingText: {
@@ -684,28 +506,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 20,
-  },
-  sectionHeaderTitle: {
-    color: "#6F7F9F",
-    fontSize: 17,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
   countChip: {
     borderRadius: 999,
-    backgroundColor: "#102A63",
+    backgroundColor: "#173B83",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   countChipText: {
     color: "#3C7CFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   errorCard: {
@@ -729,8 +538,8 @@ const styles = StyleSheet.create({
   featuredCard: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#213456",
-    backgroundColor: "#14244D",
+    borderColor: "#27466E",
+    backgroundColor: "#1A2F5A",
   },
   featuredList: {
     gap: 16,
@@ -748,7 +557,7 @@ const styles = StyleSheet.create({
   },
   featuredSummaryTeams: {
     color: "#F5F8FF",
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "800",
   },
   featuredVenue: {
@@ -758,7 +567,7 @@ const styles = StyleSheet.create({
   },
   featuredSummaryMeta: {
     color: "#A8B5D0",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   featuredSummaryMetaWrap: {
@@ -867,8 +676,8 @@ const styles = StyleSheet.create({
     gap: 14,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#213456",
-    backgroundColor: "#101C34",
+    borderColor: "#2D4F7C",
+    backgroundColor: "#162C4E",
     paddingHorizontal: 18,
     paddingVertical: 18,
   },
@@ -887,7 +696,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     color: "#F5F8FF",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
   },
   rowDay: {
@@ -898,7 +707,7 @@ const styles = StyleSheet.create({
   },
   rowSubtitle: {
     color: "#667999",
-    fontSize: 15,
+    fontSize: 14,
   },
   rowPrediction: {
     color: "#8EA7D0",
@@ -983,8 +792,8 @@ const styles = StyleSheet.create({
   emptyCard: {
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#213456",
-    backgroundColor: "#101C34",
+    borderColor: "#2D4F7C",
+    backgroundColor: "#162C4E",
     padding: 22,
     gap: 8,
   },

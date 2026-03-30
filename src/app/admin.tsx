@@ -2,7 +2,6 @@ import { createElement, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -19,7 +18,9 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CloseIcon } from "@/components/CloseIcon";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import {
   createMatch,
   formatMatchDate,
@@ -501,38 +502,38 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <AppScreenBackground />
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
+          stickyHeaderIndices={[0]}
           contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.stickyHeaderWrap}>
+            <StickyHeaderBar
+              title="Admin"
+              leftSlot={
+                <Pressable
+                  style={styles.backButton}
+                  onPress={() => {
+                    if (router.canGoBack()) {
+                      router.back();
+                      return;
+                    }
+
+                    router.replace("/(tabs)/profile");
+                  }}
+                >
+                  <BackIcon />
+                </Pressable>
+              }
+            />
+          </View>
           <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-            <View style={styles.headerRow}>
-              <Pressable
-                style={styles.backButton}
-                onPress={() => {
-                  if (router.canGoBack()) {
-                    router.back();
-                    return;
-                  }
-
-                  router.replace("/(tabs)/profile");
-                }}
-              >
-                <BackIcon />
-              </Pressable>
-              <View style={styles.headerTextWrap}>
-                <Text style={[styles.title, isDesktop && styles.titleDesktop]}>Admin</Text>
-                <Text style={[styles.subtitle, isDesktop && styles.subtitleDesktop]}>
-                  Manage fixtures and player access from one place.
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.sectionTabs}>
               <AdminTabButton
                 label="Users"
@@ -952,7 +953,7 @@ function AdminTabButton({
   );
 }
 
-function formatUserAccessStatus(user: UserProfileRecord) {
+function formatUserAccessStatus(_user: UserProfileRecord) {
   return "Active";
 }
 
@@ -1110,13 +1111,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 18,
-    paddingTop: 48,
+    paddingHorizontal: 18,
     gap: 22,
   },
   contentDesktop: {
-    paddingTop: 28,
     paddingBottom: 40,
+  },
+  stickyHeaderWrap: {
+    paddingTop: 18,
+    marginBottom: 14,
   },
   pageShell: {
     width: "100%",
@@ -1132,15 +1135,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 6,
-  },
   loadingState: {
     alignItems: "center",
     justifyContent: "center",
@@ -1152,27 +1146,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#102042",
+    backgroundColor: "#152747",
     borderWidth: 1,
-    borderColor: "#223A63",
+    borderColor: "#355586",
     marginTop: 2,
-  },
-  title: {
-    color: "#F5F7FB",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  titleDesktop: {
-    fontSize: 26,
-  },
-  subtitle: {
-    color: "#93A1BC",
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  subtitleDesktop: {
-    fontSize: 15,
-    lineHeight: 22,
   },
   card: {
     borderRadius: 24,
