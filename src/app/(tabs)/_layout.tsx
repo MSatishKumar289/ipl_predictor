@@ -31,14 +31,14 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#1E5AE0",
+        tabBarActiveTintColor: "#F2B84B",
         tabBarInactiveTintColor: "#93A1BC",
         sceneStyle: {
-          backgroundColor: "#0A1325",
+          backgroundColor: "#0B1730",
         },
         tabBarStyle: {
-          backgroundColor: "#0C1831",
-          borderTopColor: "#20324F",
+          backgroundColor: "#112543",
+          borderTopColor: "#314B73",
           height: isDesktop ? 72 : mobileTabBarHeight,
           paddingTop: 8,
           paddingBottom: isDesktop ? 10 : mobileTabBarPaddingBottom,
@@ -109,7 +109,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   transitionScreen: {
     flex: 1,
-    backgroundColor: "#0A1325",
+    backgroundColor: "#102043",
     alignItems: "center",
     justifyContent: "center",
     gap: 16,

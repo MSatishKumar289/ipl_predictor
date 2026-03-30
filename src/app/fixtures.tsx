@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,7 +10,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
+import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
+import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 
@@ -40,27 +42,26 @@ export default function FixturesScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <AppScreenBackground />
+      <View style={styles.topBannerWrap}>
+        <StickyHeaderBar
+          title="Fixtures"
+          leftSlot={<BackButton fallbackHref="/(tabs)/home" />}
+          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          edgeToEdge
+        />
+      </View>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.pageShell}>
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <BackButton fallbackHref="/(tabs)/home" />
-              <View style={styles.headerTextWrap}>
-                <Text style={styles.eyebrow}>Menu</Text>
-                <Text style={styles.title}>Fixtures</Text>
-              </View>
-              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
-            </View>
-            <Text style={styles.subtitle}>Season fixture list with match timing and current status.</Text>
-          </View>
-
           {error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
-
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -71,6 +72,9 @@ export default function FixturesScreen() {
                 <View style={[styles.matchCol, styles.headerCellLeft]}>
                   <Text style={styles.tableHeaderText}>#</Text>
                 </View>
+                <View style={[styles.timeCol, styles.headerCellCenter]}>
+                  <Text style={styles.tableHeaderText}>Start</Text>
+                </View>
                 <View style={[styles.teamsCol, styles.headerCellCenter]}>
                   <Text style={styles.tableHeaderText}>Teams</Text>
                 </View>
@@ -80,11 +84,7 @@ export default function FixturesScreen() {
                 <View style={[styles.statusCol, styles.statusHeaderCell]}>
                   <Text style={styles.tableHeaderText}>Status</Text>
                 </View>
-                <View style={[styles.timeCol, styles.headerCellCenter]}>
-                  <Text style={styles.tableHeaderText}>Start</Text>
-                </View>
               </View>
-
               {isLoading ? (
                 <View style={styles.loadingState}>
                   <ActivityIndicator size="large" color="#2463EB" />
@@ -123,6 +123,11 @@ function FixtureRow({
         #{match.matchNumber}
       </Text>
 
+      <View style={[styles.timeCol, styles.timeCell]}>
+        <Text style={styles.rowPrimary}>{formatFixtureDate(match.startAt)}</Text>
+        <Text style={styles.rowSecondary}>{formatFixtureTime(match.startAt)}</Text>
+      </View>
+
       <View style={[styles.teamsCol, styles.teamsCellInline]}>
         <Text style={styles.teamsInlineText} numberOfLines={1}>
           {match.teamAShort} <Text style={styles.teamsInlineVs}>vs</Text> {match.teamBShort}
@@ -139,11 +144,6 @@ function FixtureRow({
         <View style={[styles.statusChip, getStatusChipStyle(match.status)]}>
           <Text style={styles.statusText}>{formatStatus(match.status)}</Text>
         </View>
-      </View>
-
-      <View style={[styles.timeCol, styles.timeCell]}>
-        <Text style={styles.rowPrimary}>{formatFixtureDate(match.startAt)}</Text>
-        <Text style={styles.rowSecondary}>{formatFixtureTime(match.startAt)}</Text>
       </View>
     </View>
   );
@@ -204,45 +204,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#091327",
   },
   content: {
-    padding: 14,
-    paddingTop: 36,
+    paddingHorizontal: 14,
     paddingBottom: 40,
+    paddingTop: 14,
+  },
+  topBannerWrap: {
+    marginHorizontal: -14,
   },
   pageShell: {
     width: "100%",
     maxWidth: 1120,
     alignSelf: "center",
     gap: 18,
-  },
-  header: {
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 14,
-  },
-  headerTextWrap: {
-    flex: 1,
-    gap: 6,
-  },
-  eyebrow: {
-    color: "#3F7DFF",
-    fontSize: 14,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: "#F5F8FF",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  subtitle: {
-    color: "#8EA0C1",
-    fontSize: 16,
-    lineHeight: 24,
-    paddingRight: 8,
   },
   errorCard: {
     borderRadius: 18,
@@ -263,8 +236,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   tableWrap: {
-    backgroundColor: "transparent",
-    minWidth: 646,
+    borderRadius: 22,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderWidth: 1,
+    borderColor: "#2F507E",
+    backgroundColor: "#173055",
+    overflow: "hidden",
+    minWidth: 520,
   },
   tableScrollContent: {
     paddingBottom: 4,
@@ -272,12 +251,12 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 12,
     backgroundColor: "#132445",
     borderBottomWidth: 1,
     borderBottomColor: "#223A63",
-    gap: 5,
+    gap: 2,
   },
   tableHeaderText: {
     color: "#7FAAFF",
@@ -289,30 +268,31 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 14,
-    gap: 5,
+    gap: 2,
+    backgroundColor: "#19325A",
     borderBottomWidth: 1,
     borderBottomColor: "#1B2B4A",
   },
   matchCol: {
-    width: 32,
+    width: 28,
+    paddingLeft: 6,
   },
   teamsCol: {
-    width: 110,
+    width: 102,
   },
   venueCol: {
-    width: 154,
+    width: 144,
   },
   timeCol: {
-    width: 82,
-    paddingLeft: 4,
+    width: 62,
   },
   statusCol: {
-    width: 84,
+    width: 96,
   },
   statusHeaderCell: {
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   headerCellLeft: {
     alignItems: "flex-start",
@@ -365,6 +345,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   statusChip: {
+    minWidth: 84,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -395,11 +376,13 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
     textTransform: "uppercase",
+    textAlign: "center",
   },
   loadingState: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 48,
+    backgroundColor: "#173055",
     gap: 12,
   },
   loadingText: {
@@ -408,6 +391,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   emptyCard: {
+    backgroundColor: "#173055",
     padding: 22,
     gap: 8,
   },
