@@ -10,6 +10,32 @@ export default function Html({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                var root = document.documentElement;
+
+                function updateAppHeight() {
+                  var viewportHeight = window.visualViewport
+                    ? window.visualViewport.height
+                    : window.innerHeight;
+
+                  root.style.setProperty("--app-height", viewportHeight + "px");
+                }
+
+                updateAppHeight();
+                window.addEventListener("resize", updateAppHeight);
+                window.addEventListener("orientationchange", updateAppHeight);
+
+                if (window.visualViewport) {
+                  window.visualViewport.addEventListener("resize", updateAppHeight);
+                  window.visualViewport.addEventListener("scroll", updateAppHeight);
+                }
+              })();
+            `,
+          }}
+        />
         <style
           id="expo-reset"
           dangerouslySetInnerHTML={{
@@ -17,22 +43,26 @@ export default function Html({ children }: PropsWithChildren) {
               html, body {
                 margin: 0;
                 width: 100%;
-                min-height: 100%;
+                height: var(--app-height, 100vh);
+                min-height: var(--app-height, 100vh);
                 background-color: #0A1325;
+                overscroll-behavior: none;
               }
 
               body {
-                overflow: hidden;
+                overflow: auto;
               }
 
               #root {
                 display: flex;
                 width: 100%;
-                min-height: 100%;
+                height: var(--app-height, 100vh);
+                min-height: var(--app-height, 100vh);
               }
 
               @supports (height: 100dvh) {
                 html, body, #root {
+                  height: 100dvh;
                   min-height: 100dvh;
                 }
               }
