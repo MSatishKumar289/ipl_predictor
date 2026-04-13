@@ -688,7 +688,13 @@ export default function MatchDetailScreen() {
               }
             }}
           />
-          <View style={styles.confirmSheet}>
+          <ScrollView
+            style={styles.confirmSheet}
+            contentContainerStyle={styles.confirmSheetContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Confirm Prediction</Text>
@@ -707,7 +713,7 @@ export default function MatchDetailScreen() {
                       : "Live Tonight"}
                 </Text>
                 <Text style={styles.confirmMatchTitle}>
-                  {currentMatch.teamAName} vs {currentMatch.teamBName}
+                  {currentMatch.teamAShort} vs {currentMatch.teamBShort}
                 </Text>
                 <Text style={styles.confirmMatchMeta}>
                   {formatMatchDate(currentMatch.startAt)}
@@ -777,7 +783,7 @@ export default function MatchDetailScreen() {
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -1182,12 +1188,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   confirmSheet: {
+    maxHeight: "88%",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
     borderColor: "#315585",
     backgroundColor: "#173055",
-    paddingHorizontal: 24,
+    overflow: "hidden",
+  },
+  confirmSheetContent: {
+    paddingHorizontal: 18,
     paddingTop: 14,
     paddingBottom: 28,
     gap: 18,
@@ -1209,6 +1219,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1C2A45",
   },
   sheetTitle: {
+    flex: 1,
     color: "#F7FAFF",
     fontSize: 22,
     fontWeight: "800",
@@ -1228,17 +1239,18 @@ const styles = StyleSheet.create({
   },
   confirmMatchCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#3C5C8D",
     backgroundColor: "#1A345D",
-    padding: 18,
-    gap: 16,
+    padding: 16,
+    gap: 12,
   },
   confirmMatchBody: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
   confirmEyebrow: {
@@ -1250,8 +1262,9 @@ const styles = StyleSheet.create({
   },
   confirmMatchTitle: {
     color: "#F7FAFF",
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "800",
+    flexShrink: 1,
   },
   confirmMatchMeta: {
     color: "#94A4C0",
@@ -1259,11 +1272,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   confirmBadge: {
-    minWidth: 112,
-    borderRadius: 14,
+    minWidth: 88,
+    maxWidth: "40%",
+    flexShrink: 1,
+    borderRadius: 12,
     backgroundColor: "#0F2B66",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1271,6 +1286,7 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 15,
     fontWeight: "800",
+    textAlign: "center",
   },
   confirmDetails: {
     gap: 18,
@@ -1278,11 +1294,12 @@ const styles = StyleSheet.create({
   },
   confirmRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 16,
   },
   confirmLabel: {
+    flex: 1,
     color: "#9FB0CF",
     fontSize: 16,
     fontWeight: "600",
@@ -1294,6 +1311,8 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   confirmValueWrap: {
+    flex: 1,
+    minWidth: 0,
     alignItems: "flex-end",
     justifyContent: "center",
   },
