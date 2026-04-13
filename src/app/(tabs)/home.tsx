@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     maxWidth: 960,
   },
   topBannerWrap: {
-    marginHorizontal: -18,
+    overflow: "hidden",
   },
   pageShell: {
     gap: 18,

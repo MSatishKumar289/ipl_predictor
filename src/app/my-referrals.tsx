@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   topBannerWrap: {
-    marginHorizontal: -18,
+    overflow: "hidden",
   },
   pageShell: {
     width: "100%",

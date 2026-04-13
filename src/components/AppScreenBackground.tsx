@@ -2,7 +2,7 @@ import { StyleSheet, View } from "react-native";
 
 export function AppScreenBackground() {
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]}>
       <View style={styles.base} />
       <View style={[styles.orb, styles.orbPrimary]} />
       <View style={[styles.orb, styles.orbWarm]} />
@@ -14,6 +14,9 @@ export function AppScreenBackground() {
 }
 
 const styles = StyleSheet.create({
+  clip: {
+    overflow: "hidden",
+  },
   base: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#0B1730",

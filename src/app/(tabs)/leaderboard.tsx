@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   topBannerWrap: {
-    marginHorizontal: -18,
+    overflow: "hidden",
   },
   pageShell: {
     width: "100%",

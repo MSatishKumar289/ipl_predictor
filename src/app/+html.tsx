@@ -47,10 +47,11 @@ export default function Html({ children }: PropsWithChildren) {
                 min-height: var(--app-height, 100vh);
                 background-color: #0A1325;
                 overscroll-behavior: none;
+                overflow-x: hidden;
               }
 
               body {
-                overflow: auto;
+                overflow-y: auto;
               }
 
               #root {
@@ -58,6 +59,7 @@ export default function Html({ children }: PropsWithChildren) {
                 width: 100%;
                 height: var(--app-height, 100vh);
                 min-height: var(--app-height, 100vh);
+                overflow-x: hidden;
               }
 
               @supports (height: 100dvh) {
