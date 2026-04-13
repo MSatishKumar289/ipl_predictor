@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   contentDesktop: {
   },
   topBannerWrap: {
-    marginHorizontal: -18,
+    overflow: "hidden",
   },
   pageShell: {
     width: "100%",
