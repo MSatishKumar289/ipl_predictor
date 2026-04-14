@@ -35,6 +35,12 @@ import { deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
 import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/ipl-teams";
 import type { MatchRecord } from "@/lib/match-types";
 import type { UserProfileRecord } from "@/lib/auth-types";
+import {
+  DEFAULT_WEEKLY_SPIN_AUDIENCE,
+  subscribeToWeeklySpinConfig,
+  updateWeeklySpinConfig,
+} from "@/lib/spin";
+import type { WeeklySpinAudience } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type PendingSettlement = {
@@ -50,7 +56,7 @@ type PendingRevert = {
 
 type PickerMode = "date" | "time" | null;
 type AdminMatchView = "live" | "results";
-type AdminSection = "users" | "create_match" | "manage_match";
+type AdminSection = "users" | "create_match" | "manage_match" | "weekly_spin";
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -81,6 +87,9 @@ export default function AdminScreen() {
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [createMatchError, setCreateMatchError] = useState<string | null>(null);
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
+  const [weeklySpinAudience, setWeeklySpinAudience] =
+    useState<WeeklySpinAudience>(DEFAULT_WEEKLY_SPIN_AUDIENCE);
+  const [isSavingWeeklySpin, setIsSavingWeeklySpin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -113,6 +122,19 @@ export default function AdminScreen() {
       () => {
         setUsers([]);
         setIsLoadingUsers(false);
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToWeeklySpinConfig(
+      (config) => {
+        setWeeklySpinAudience(config.audience);
+      },
+      () => {
+        setWeeklySpinAudience(DEFAULT_WEEKLY_SPIN_AUDIENCE);
       }
     );
 
@@ -334,6 +356,24 @@ export default function AdminScreen() {
     }
   }
 
+  async function handleWeeklySpinAudienceChange(nextAudience: WeeklySpinAudience) {
+    if (isSavingWeeklySpin || nextAudience === weeklySpinAudience) {
+      return;
+    }
+
+    try {
+      setIsSavingWeeklySpin(true);
+      await updateWeeklySpinConfig(nextAudience, adminUserId);
+      setWeeklySpinAudience(nextAudience);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to update weekly spin settings.";
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsSavingWeeklySpin(false);
+    }
+  }
+
   function openPicker(mode: Exclude<PickerMode, null>) {
     const seed = buildPickerSeed(matchDate, matchTime);
     setPickerValue(seed);
@@ -550,6 +590,11 @@ export default function AdminScreen() {
                 active={activeSection === "manage_match"}
                 onPress={() => setActiveSection("manage_match")}
               />
+              <AdminTabButton
+                label="Weekly Spin"
+                active={activeSection === "weekly_spin"}
+                onPress={() => setActiveSection("weekly_spin")}
+              />
             </View>
 
             {activeSection === "create_match" ? (
@@ -673,8 +718,8 @@ export default function AdminScreen() {
                     </Text>
                   </Pressable>
                 </View>
-              ) : activeSection === "manage_match" ? (
-                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+            ) : activeSection === "manage_match" ? (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Manage Matches</Text>
                   <View style={styles.viewTabs}>
                     <AdminTabButton
@@ -801,8 +846,48 @@ export default function AdminScreen() {
                     </Text>
                   )}
                 </View>
-              ) : (
-                <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+            ) : activeSection === "weekly_spin" ? (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                <Text style={styles.cardTitle}>Weekly Spin Access</Text>
+                <Text style={styles.sectionDescription}>
+                  Control when users can see the weekly spin on Home.
+                </Text>
+                <View style={styles.viewTabs}>
+                  <AdminTabButton
+                    label="Disabled"
+                    active={weeklySpinAudience === "disabled"}
+                    onPress={() => void handleWeeklySpinAudienceChange("disabled")}
+                    compact
+                  />
+                  <AdminTabButton
+                    label="All Active Users"
+                    active={weeklySpinAudience === "all_active_users"}
+                    onPress={() => void handleWeeklySpinAudienceChange("all_active_users")}
+                    compact
+                  />
+                  <AdminTabButton
+                    label="Eligible Users"
+                    active={weeklySpinAudience === "eligible_users_only"}
+                    onPress={() => void handleWeeklySpinAudienceChange("eligible_users_only")}
+                    compact
+                  />
+                </View>
+                <View style={styles.selectionSummaryCard}>
+                  <Text style={styles.selectionSummaryTitle}>Current Mode</Text>
+                  <Text style={styles.selectionSummaryText}>
+                    {weeklySpinAudience === "disabled"
+                      ? "No user can see Weekly Spin."
+                      : weeklySpinAudience === "all_active_users"
+                        ? "Users who have played at least one match can see Weekly Spin."
+                        : "Only users who have played at least 30% of completed matches can see Weekly Spin."}
+                  </Text>
+                  {isSavingWeeklySpin ? (
+                    <Text style={styles.selectionSummaryText}>Saving changes...</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
                   <Text style={styles.cardTitle}>Users List</Text>
                   <TextInput
                     style={styles.input}
@@ -1166,6 +1251,11 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 22,
     fontWeight: "700",
+  },
+  sectionDescription: {
+    color: "#9FB0CF",
+    fontSize: 14,
+    lineHeight: 20,
   },
   viewTabs: {
     flexDirection: "row",

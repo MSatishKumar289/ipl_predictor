@@ -215,6 +215,11 @@ export async function deleteUserRecords(uid: string) {
   const userRef = doc(db, "users", uid);
   const predictionsQuery = query(collection(db, "predictions"), where("userId", "==", uid));
   const transactionsQuery = query(collection(db, "transactions"), where("userId", "==", uid));
+  const userRewardsQuery = query(collection(db, "user_rewards"), where("userId", "==", uid));
+  const weeklySpinResultsQuery = query(
+    collection(db, "weekly_spin_results"),
+    where("userId", "==", uid)
+  );
   const referralsByReferrerQuery = query(
     collection(db, "referrals"),
     where("referrerUserId", "==", uid)
@@ -224,10 +229,19 @@ export async function deleteUserRecords(uid: string) {
     where("referredUserId", "==", uid)
   );
 
-  const [predictionSnapshots, transactionSnapshots, referrerReferralSnapshots, referredReferralSnapshots] =
+  const [
+    predictionSnapshots,
+    transactionSnapshots,
+    rewardSnapshots,
+    spinResultSnapshots,
+    referrerReferralSnapshots,
+    referredReferralSnapshots,
+  ] =
     await Promise.all([
       getDocs(predictionsQuery),
       getDocs(transactionsQuery),
+      getDocs(userRewardsQuery),
+      getDocs(weeklySpinResultsQuery),
       getDocs(referralsByReferrerQuery),
       getDocs(referralsByReferredQuery),
     ]);
@@ -240,6 +254,14 @@ export async function deleteUserRecords(uid: string) {
   }
 
   for (const snapshot of transactionSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  for (const snapshot of rewardSnapshots.docs) {
+    refsToDelete.set(snapshot.ref.path, snapshot.ref);
+  }
+
+  for (const snapshot of spinResultSnapshots.docs) {
     refsToDelete.set(snapshot.ref.path, snapshot.ref);
   }
 

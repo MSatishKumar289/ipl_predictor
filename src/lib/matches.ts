@@ -437,7 +437,8 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       const shouldRewardReferral = shouldFinalizeReferral && referrerData.role !== "admin";
 
       if (winner === "no_result") {
-        const refundedBalance = userData.balance + prediction.amount;
+        const refundedDebitAmount = prediction.walletDebitAmount ?? prediction.amount;
+        const refundedBalance = userData.balance + refundedDebitAmount;
 
         transaction.update(userRef, {
           balance: refundedBalance,
@@ -446,23 +447,35 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
 
         transaction.update(predictionRef, {
           status: "refunded",
-          payout: prediction.amount,
+          payout: refundedDebitAmount,
           profit: 0,
           settledAt: settlementTime,
           updatedAt: serverTimestamp(),
         });
 
-        transaction.set(transactionRef, {
-          userId: prediction.userId,
-          type: "match_refund_no_result",
-          amount: prediction.amount,
-          balanceBefore: userData.balance,
-          balanceAfter: refundedBalance,
-          referenceType: "match",
-          referenceId: matchId,
-          note: `Refund for match ${latestMatch.matchNumber} due to no result`,
-          createdAt: serverTimestamp(),
-        });
+        if (refundedDebitAmount > 0) {
+          transaction.set(transactionRef, {
+            userId: prediction.userId,
+            type: "match_refund_no_result",
+            amount: refundedDebitAmount,
+            balanceBefore: userData.balance,
+            balanceAfter: refundedBalance,
+            referenceType: "match",
+            referenceId: matchId,
+            note: `Refund for match ${latestMatch.matchNumber} due to no result`,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        if (prediction.appliedRewardId) {
+          transaction.update(doc(db, "user_rewards", prediction.appliedRewardId), {
+            status: "available",
+            usedPredictionId: null,
+            usedMatchId: null,
+            usedAt: null,
+            updatedAt: serverTimestamp(),
+          });
+        }
 
         if (shouldRewardReferral) {
           const referrerNextBalance = referrerData.balance + REFERRAL_REWARD_AMOUNT;
@@ -573,18 +586,40 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         continue;
       }
 
+      const insuranceRefund =
+        prediction.appliedRewardType === "bet_insurance" && prediction.appliedRewardCapAmount
+          ? Math.min(prediction.amount, prediction.appliedRewardCapAmount)
+          : 0;
+      const walletDebitAmount = prediction.walletDebitAmount ?? prediction.amount;
+      const nextBalance = userData.balance + insuranceRefund;
+
       transaction.update(userRef, {
+        balance: nextBalance,
         losses: userData.losses + 1,
         updatedAt: serverTimestamp(),
       });
 
       transaction.update(predictionRef, {
         status: "lost",
-        payout: 0,
-        profit: -prediction.amount,
+        payout: insuranceRefund,
+        profit: insuranceRefund - walletDebitAmount,
         settledAt: settlementTime,
         updatedAt: serverTimestamp(),
       });
+
+      if (insuranceRefund > 0) {
+        transaction.set(transactionRef, {
+          userId: prediction.userId,
+          type: "bet_insurance_refund",
+          amount: insuranceRefund,
+          balanceBefore: userData.balance,
+          balanceAfter: nextBalance,
+          referenceType: "match",
+          referenceId: matchId,
+          note: `Bet Insurance refund for match ${latestMatch.matchNumber}`,
+          createdAt: serverTimestamp(),
+        });
+      }
 
       if (shouldRewardReferral) {
         const referrerNextBalance = referrerData.balance + REFERRAL_REWARD_AMOUNT;

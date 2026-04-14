@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000" fill="none">
+  <g>
+    <!-- 12 equal segments (30deg each), starting at top -->
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#8BC53F" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#D2DD1F" transform="rotate(30 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#2A88B1" transform="rotate(60 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#2F3F8F" transform="rotate(90 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#C9BB8E" transform="rotate(120 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#E7D79A" transform="rotate(150 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#D4AC78" transform="rotate(180 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#BF8458" transform="rotate(210 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#A54A2D" transform="rotate(240 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#E91F1F" transform="rotate(270 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#E55B27" transform="rotate(300 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269 Z" fill="#DB9F2C" transform="rotate(330 500 500)" />
+
+    <!-- segment dividers -->
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(30 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(60 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(90 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(120 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(150 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(180 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(210 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(240 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(270 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(300 500 500)" />
+    <path d="M500 500 L500 80 A420 420 0 0 1 710 136.269" stroke="#EAEAEA" stroke-width="2" fill="none" transform="rotate(330 500 500)" />
+
+    <!-- field labels -->
+    <g transform="rotate(15 500 500)">
+      <text x="490" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">5K</text>
+      <circle cx="534" cy="178" r="12" fill="#F6C64A" stroke="#D99B1F" stroke-width="2" />
+      <circle cx="534" cy="178" r="6" fill="#FFE38E" />
+    </g>
+    <g transform="rotate(45 500 500)">
+      <text x="488" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">10K</text>
+      <circle cx="538" cy="178" r="12" fill="#F6C64A" stroke="#D99B1F" stroke-width="2" />
+      <circle cx="538" cy="178" r="6" fill="#FFE38E" />
+    </g>
+    <g transform="rotate(75 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">BLNT</text>
+    </g>
+    <g transform="rotate(105 500 500)">
+      <text x="488" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">30K</text>
+      <circle cx="538" cy="178" r="12" fill="#F6C64A" stroke="#D99B1F" stroke-width="2" />
+      <circle cx="538" cy="178" r="6" fill="#FFE38E" />
+    </g>
+    <g transform="rotate(135 500 500)">
+      <text x="490" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">1K</text>
+      <circle cx="534" cy="178" r="12" fill="#F6C64A" stroke="#D99B1F" stroke-width="2" />
+      <circle cx="534" cy="178" r="6" fill="#FFE38E" />
+    </g>
+    <g transform="rotate(165 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">2pt</text>
+    </g>
+    <g transform="rotate(195 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">BLNT</text>
+    </g>
+    <g transform="rotate(225 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">5pt</text>
+    </g>
+    <g transform="rotate(255 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">+1TKT</text>
+    </g>
+    <g transform="rotate(285 500 500)">
+      <text x="500" y="182" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="28" font-weight="600">Bet</text>
+      <path d="M468 206 L482 206 L490 194 L500 218 L510 196 L518 206 L532 206" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+    <g transform="rotate(315 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">BLNT</text>
+    </g>
+    <g transform="rotate(345 500 500)">
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">+1TKT</text>
+    </g>
+
+    <!-- outer ring -->
+    <circle cx="500" cy="500" r="435" stroke="#F0F0F0" stroke-width="14" fill="none" />
+
+    <!-- center cap -->
+    <circle cx="500" cy="500" r="130" fill="#4B4B51" stroke="#2F2F35" stroke-width="8" />
+  </g>
+</svg>

@@ -38,6 +38,11 @@ import {
 } from "@/lib/predictions";
 import type { MatchRecord } from "@/lib/match-types";
 import type { PredictionSelection, PredictionRecord } from "@/lib/prediction-types";
+import {
+  formatRewardUsageLabel,
+  subscribeToAvailableRewards,
+} from "@/lib/spin";
+import type { UserRewardRecord } from "@/lib/spin-types";
 
 function teamLabel(match: MatchRecord, selection: PredictionSelection) {
   return selection === "teamA" ? match.teamAShort : match.teamBShort;
@@ -75,6 +80,13 @@ function getPredictionErrorConfig(message: string) {
   if (message.startsWith("Maximum allowed bet is")) {
     return {
       title: "Bet limit reached",
+      body: message,
+    };
+  }
+
+  if (message.startsWith("Free Bet Ticket can only be used")) {
+    return {
+      title: "Reward limit",
       body: message,
     };
   }
@@ -136,8 +148,10 @@ export default function MatchDetailScreen() {
   const [match, setMatch] = useState<MatchRecord | null>(null);
   const [prediction, setPrediction] = useState<PredictionRecord | null>(null);
   const [publicPredictions, setPublicPredictions] = useState<PredictionRecord[]>([]);
+  const [availableRewards, setAvailableRewards] = useState<UserRewardRecord[]>([]);
   const [selection, setSelection] = useState<PredictionSelection>("teamA");
   const [amount, setAmount] = useState("");
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoadingMatch, setIsLoadingMatch] = useState(true);
@@ -155,6 +169,7 @@ export default function MatchDetailScreen() {
 
     setSelection("teamA");
     setAmount("");
+    setSelectedRewardId(null);
     setIsConfirmVisible(false);
     setIsDeleteConfirmVisible(false);
     setIsEditingPrediction(false);
@@ -204,6 +219,7 @@ export default function MatchDetailScreen() {
         setPredictionError(null);
         setSelection(nextPrediction?.selectedTeam ?? "teamA");
         setAmount(nextPrediction ? String(nextPrediction.amount) : "");
+        setSelectedRewardId(nextPrediction?.appliedRewardId ?? null);
         setIsEditingPrediction(false);
       },
       (error) => {
@@ -229,6 +245,23 @@ export default function MatchDetailScreen() {
     return unsubscribe;
   }, [id]);
 
+  useEffect(() => {
+    if (!user) {
+      setAvailableRewards([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToAvailableRewards(
+      user.uid,
+      setAvailableRewards,
+      (error) => {
+        setPredictionError(`Rewards read failed: ${error.message}`);
+      }
+    );
+
+    return unsubscribe;
+  }, [user]);
+
   const locked = match ? isMatchLocked(match.lockAt) : false;
   const bettingState = match ? getBettingState(match) : null;
   const showCompletedPublicView =
@@ -240,8 +273,35 @@ export default function MatchDetailScreen() {
   const isEditMode = !prediction || isEditingPrediction;
   const inputsEditable = canEdit && isEditMode;
   const isDesktop = width >= 1024;
-  const availableBalance = (profile?.balance ?? 0) + (prediction?.amount ?? 0);
+  const availableBalance =
+    (profile?.balance ?? 0) + (prediction?.walletDebitAmount ?? prediction?.amount ?? 0);
   const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
+  const attachedReward =
+    prediction?.appliedRewardId && prediction.appliedRewardType && prediction.appliedRewardCapAmount
+      ? ({
+          id: prediction.appliedRewardId,
+          userId: user?.uid ?? "",
+          type: prediction.appliedRewardType,
+          label:
+            prediction.appliedRewardLabel ??
+            (prediction.appliedRewardType === "free_bet_ticket"
+              ? "Free Bet Ticket"
+              : "Bet Insurance"),
+          status: "used",
+          sourceType: "weekly_spin",
+          sourceCycleId: "",
+          sourceSpinResultId: "",
+          capAmount: prediction.appliedRewardCapAmount,
+        } satisfies UserRewardRecord)
+      : null;
+  const rewardOptions = attachedReward
+    ? [
+        attachedReward,
+        ...availableRewards.filter((reward) => reward.id !== attachedReward.id),
+      ]
+    : availableRewards;
+  const selectedReward =
+    rewardOptions.find((reward) => reward.id === selectedRewardId) ?? null;
 
   const resultLabel = useMemo(() => {
     if (!match?.winner) {
@@ -322,9 +382,19 @@ export default function MatchDetailScreen() {
       return rejectValidation(`Bets must be in multiples of ${BET_STEP} coins.`);
     }
 
+    if (selectedReward?.type === "free_bet_ticket" && parsedAmount > selectedReward.capAmount) {
+      return rejectValidation(
+        `Free Bet Ticket can only be used for bets up to ${selectedReward.capAmount.toLocaleString("en-IN")} coins.`
+      );
+    }
+
     const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
 
-    if (maximumAllowedBet !== null && parsedAmount > maximumAllowedBet) {
+    if (
+      selectedReward?.type !== "free_bet_ticket" &&
+      maximumAllowedBet !== null &&
+      parsedAmount > maximumAllowedBet
+    ) {
       return rejectValidation(
         `Maximum allowed bet is ${maximumAllowedBet.toLocaleString("en-IN")} coins for your current balance tier. Bets must also be in multiples of ${BET_STEP} coins.`
         ,
@@ -332,7 +402,10 @@ export default function MatchDetailScreen() {
       );
     }
 
-    if (parsedAmount > availableBalance) {
+    if (
+      selectedReward?.type !== "free_bet_ticket" &&
+      parsedAmount > availableBalance
+    ) {
       return rejectValidation("Insufficient balance for this prediction.", true);
     }
 
@@ -374,6 +447,7 @@ export default function MatchDetailScreen() {
         userDisplayName: profile.displayName,
         selection,
         amount: parsedAmount,
+        appliedReward: selectedReward,
       });
 
       setIsConfirmVisible(false);
@@ -550,10 +624,57 @@ export default function MatchDetailScreen() {
 
                 {inputsEditable ? (
                   <Text style={styles.helperText}>
-                    {maximumAllowedBet !== null
+                    {selectedReward?.type === "free_bet_ticket"
+                      ? `Free Bet Ticket active. This bet will not deduct coins and is capped at ${selectedReward.capAmount.toLocaleString("en-IN")} coins.`
+                      : maximumAllowedBet !== null
                       ? `Max allowed for you: ${maximumAllowedBet.toLocaleString("en-IN")} coins. Bets above 20,000 balance are capped at 50%, and above 10,000 at 70%.`
                       : `Min bet is ${MINIMUM_BET} coins in multiples of ${BET_STEP}.`}
                   </Text>
+                ) : null}
+
+                {rewardOptions.length > 0 && inputsEditable ? (
+                  <View style={styles.rewardSection}>
+                    <Text style={styles.rewardSectionTitle}>Optional Reward</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={styles.rewardChipRow}>
+                        <Pressable
+                          style={[
+                            styles.rewardChip,
+                            !selectedRewardId && styles.rewardChipActive,
+                          ]}
+                          onPress={() => setSelectedRewardId(null)}
+                        >
+                          <Text
+                            style={[
+                              styles.rewardChipText,
+                              !selectedRewardId && styles.rewardChipTextActive,
+                            ]}
+                          >
+                            No Reward
+                          </Text>
+                        </Pressable>
+                        {rewardOptions.map((reward) => (
+                          <Pressable
+                            key={reward.id}
+                            style={[
+                              styles.rewardChip,
+                              selectedRewardId === reward.id && styles.rewardChipActive,
+                            ]}
+                            onPress={() => setSelectedRewardId(reward.id)}
+                          >
+                            <Text
+                              style={[
+                                styles.rewardChipText,
+                                selectedRewardId === reward.id && styles.rewardChipTextActive,
+                              ]}
+                            >
+                              {formatRewardUsageLabel(reward)}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
                 ) : null}
 
                 {prediction ? (
@@ -760,6 +881,15 @@ export default function MatchDetailScreen() {
                   />
                 }
               />
+              {selectedReward ? (
+                <>
+                  <View style={styles.confirmDivider} />
+                  <ConfirmRow
+                    label="Applied Reward"
+                    value={formatRewardUsageLabel(selectedReward)}
+                  />
+                </>
+              ) : null}
             </View>
 
             <Pressable
@@ -1071,6 +1201,39 @@ const styles = StyleSheet.create({
     color: "#8FA5CC",
     fontSize: 13,
     lineHeight: 18,
+  },
+  rewardSection: {
+    gap: 8,
+  },
+  rewardSectionTitle: {
+    color: "#DCE8FF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  rewardChipRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingRight: 8,
+  },
+  rewardChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#355586",
+    backgroundColor: "#132952",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  rewardChipActive: {
+    borderColor: "#F2B84B",
+    backgroundColor: "#3A2E0D",
+  },
+  rewardChipText: {
+    color: "#DCE8FF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  rewardChipTextActive: {
+    color: "#F7D88D",
   },
   actionRow: {
     flexDirection: "row",

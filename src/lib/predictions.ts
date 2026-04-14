@@ -13,6 +13,7 @@ import type { UserProfile } from "./auth-types";
 import { isBettingOpen } from "./matches";
 import type { MatchRecord } from "./match-types";
 import type { PredictionRecord, PredictionSelection } from "./prediction-types";
+import type { UserRewardRecord } from "./spin-types";
 
 export const MINIMUM_BET = 100;
 export const BET_STEP = 100;
@@ -116,12 +117,14 @@ export async function placeOrEditPrediction({
   userDisplayName,
   selection,
   amount,
+  appliedReward,
 }: {
   match: MatchRecord;
   userId: string;
   userDisplayName: string;
   selection: PredictionSelection;
   amount: number;
+  appliedReward: UserRewardRecord | null;
 }) {
   if (amount < MINIMUM_BET) {
     throw new Error(`Minimum bet is ${MINIMUM_BET} coins.`);
@@ -134,12 +137,14 @@ export async function placeOrEditPrediction({
   const matchRef = doc(db, "matches", match.id);
   const userRef = doc(db, "users", userId);
   const predictionRef = doc(db, "predictions", predictionId(match.id, userId));
+  const nextRewardRef = appliedReward ? doc(db, "user_rewards", appliedReward.id) : null;
 
   await runTransaction(db, async (transaction) => {
-    const [matchSnapshot, userSnapshot, predictionSnapshot] = await Promise.all([
+    const [matchSnapshot, userSnapshot, predictionSnapshot, nextRewardSnapshot] = await Promise.all([
       transaction.get(matchRef),
       transaction.get(userRef),
       transaction.get(predictionRef),
+      nextRewardRef ? transaction.get(nextRewardRef) : Promise.resolve(null),
     ]);
 
     if (!matchSnapshot.exists()) {
@@ -154,6 +159,12 @@ export async function placeOrEditPrediction({
     const liveUser = userSnapshot.data() as UserProfile;
     const existingPrediction = predictionSnapshot.exists()
       ? (predictionSnapshot.data() as Omit<PredictionRecord, "id">)
+      : null;
+    const previousRewardRef = existingPrediction?.appliedRewardId
+      ? doc(db, "user_rewards", existingPrediction.appliedRewardId)
+      : null;
+    const previousRewardSnapshot = previousRewardRef
+      ? await transaction.get(previousRewardRef)
       : null;
     const referralRef = liveUser.referralId ? doc(db, "referrals", liveUser.referralId) : null;
     const referralSnapshot = referralRef ? await transaction.get(referralRef) : null;
@@ -180,18 +191,35 @@ export async function placeOrEditPrediction({
       throw new Error("Prediction editing is disabled for this match.");
     }
 
-    const previousAmount = existingPrediction?.amount ?? 0;
-    const availableBalance = liveUser.balance + previousAmount;
+    const previousWalletDebitAmount =
+      existingPrediction?.walletDebitAmount ?? existingPrediction?.amount ?? 0;
+    const availableBalance = liveUser.balance + previousWalletDebitAmount;
     const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
-    const nextBalance = availableBalance - amount;
 
-    if (maximumAllowedBet !== null && amount > maximumAllowedBet) {
+    if (
+      appliedReward?.type === "free_bet_ticket" &&
+      amount > appliedReward.capAmount
+    ) {
+      throw new Error(
+        `Free Bet Ticket can only be used for bets up to ${appliedReward.capAmount.toLocaleString("en-IN")} coins.`
+      );
+    }
+
+    const nextWalletDebitAmount =
+      appliedReward?.type === "free_bet_ticket" ? 0 : amount;
+    const nextBalance = availableBalance - nextWalletDebitAmount;
+
+    if (
+      appliedReward?.type !== "free_bet_ticket" &&
+      maximumAllowedBet !== null &&
+      amount > maximumAllowedBet
+    ) {
       throw new Error(
         `Maximum allowed bet is ${maximumAllowedBet.toLocaleString("en-IN")} coins for your current balance tier. Bets must also be in multiples of ${BET_STEP} coins.`
       );
     }
 
-    if (nextBalance < 0) {
+    if (appliedReward?.type !== "free_bet_ticket" && nextBalance < 0) {
       throw new Error("Insufficient balance for this prediction.");
     }
 
@@ -202,6 +230,46 @@ export async function placeOrEditPrediction({
       settledAt: null,
       updatedAt: serverTimestamp(),
     } as const;
+    const previousRewardId = existingPrediction?.appliedRewardId ?? null;
+    const nextRewardId = appliedReward?.id ?? null;
+
+    if (
+      nextRewardSnapshot &&
+      (!nextRewardSnapshot.exists() ||
+        (nextRewardSnapshot.data() as UserRewardRecord).userId !== userId ||
+        ((nextRewardSnapshot.data() as UserRewardRecord).status !== "available" &&
+          nextRewardId !== previousRewardId))
+    ) {
+      throw new Error("Selected reward is no longer available.");
+    }
+
+    if (previousRewardId && previousRewardId !== nextRewardId && previousRewardSnapshot?.exists()) {
+      transaction.update(previousRewardRef!, {
+        status: "available",
+        usedPredictionId: null,
+        usedMatchId: null,
+        usedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    if (nextRewardRef && nextRewardId !== previousRewardId) {
+      transaction.update(nextRewardRef, {
+        status: "used",
+        usedPredictionId: predictionRef.id,
+        usedMatchId: match.id,
+        usedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    const rewardFields = {
+      walletDebitAmount: nextWalletDebitAmount,
+      appliedRewardId: appliedReward?.id ?? null,
+      appliedRewardType: appliedReward?.type ?? null,
+      appliedRewardLabel: appliedReward?.label ?? null,
+      appliedRewardCapAmount: appliedReward?.capAmount ?? null,
+    };
 
     if (!existingPrediction) {
       transaction.set(predictionRef, {
@@ -210,6 +278,7 @@ export async function placeOrEditPrediction({
         userDisplayName,
         selectedTeam: selection,
         amount,
+        ...rewardFields,
         createdAt: serverTimestamp(),
         ...settlementDefaults,
       });
@@ -222,13 +291,21 @@ export async function placeOrEditPrediction({
 
       transaction.set(doc(collection(db, "transactions")), {
         userId,
-        type: "bet_placed",
-        amount: -amount,
+        type:
+          appliedReward?.type === "free_bet_ticket"
+            ? "bet_placed_with_free_ticket"
+            : "bet_placed",
+        amount: -nextWalletDebitAmount,
         balanceBefore: liveUser.balance,
         balanceAfter: nextBalance,
         referenceType: "match",
         referenceId: match.id,
-        note: `Placed prediction for match ${match.matchNumber}`,
+        note:
+          appliedReward?.type === "free_bet_ticket"
+            ? `Placed prediction for match ${match.matchNumber} using Free Bet Ticket`
+            : appliedReward?.type === "bet_insurance"
+              ? `Placed prediction for match ${match.matchNumber} using Bet Insurance`
+              : `Placed prediction for match ${match.matchNumber}`,
         createdAt: serverTimestamp(),
       });
 
@@ -251,6 +328,7 @@ export async function placeOrEditPrediction({
     transaction.update(predictionRef, {
       selectedTeam: selection,
       amount,
+      ...rewardFields,
       ...settlementDefaults,
     });
 
@@ -259,27 +337,37 @@ export async function placeOrEditPrediction({
       updatedAt: serverTimestamp(),
     });
 
-    transaction.set(doc(collection(db, "transactions")), {
-      userId,
-      type: "bet_edit_refund",
-      amount: previousAmount,
-      balanceBefore: liveUser.balance,
-      balanceAfter: liveUser.balance + previousAmount,
-      referenceType: "match",
-      referenceId: match.id,
-      note: `Refunded previous prediction before edit for match ${match.matchNumber}`,
-      createdAt: serverTimestamp(),
-    });
+    if (previousWalletDebitAmount > 0) {
+      transaction.set(doc(collection(db, "transactions")), {
+        userId,
+        type: "bet_edit_refund",
+        amount: previousWalletDebitAmount,
+        balanceBefore: liveUser.balance,
+        balanceAfter: liveUser.balance + previousWalletDebitAmount,
+        referenceType: "match",
+        referenceId: match.id,
+        note: `Refunded previous prediction before edit for match ${match.matchNumber}`,
+        createdAt: serverTimestamp(),
+      });
+    }
 
     transaction.set(doc(collection(db, "transactions")), {
       userId,
-      type: "bet_edit_placed",
-      amount: -amount,
-      balanceBefore: liveUser.balance + previousAmount,
+      type:
+        appliedReward?.type === "free_bet_ticket"
+          ? "bet_edit_placed_with_free_ticket"
+          : "bet_edit_placed",
+      amount: -nextWalletDebitAmount,
+      balanceBefore: liveUser.balance + previousWalletDebitAmount,
       balanceAfter: nextBalance,
       referenceType: "match",
       referenceId: match.id,
-      note: `Updated prediction for match ${match.matchNumber}`,
+      note:
+        appliedReward?.type === "free_bet_ticket"
+          ? `Updated prediction for match ${match.matchNumber} using Free Bet Ticket`
+          : appliedReward?.type === "bet_insurance"
+            ? `Updated prediction for match ${match.matchNumber} using Bet Insurance`
+            : `Updated prediction for match ${match.matchNumber}`,
       createdAt: serverTimestamp(),
     });
   });
@@ -343,7 +431,9 @@ export async function deletePrediction({
       throw new Error("Prediction editing is disabled for this match.");
     }
 
-    const nextBalance = liveUser.balance + livePrediction.amount;
+    const refundedDebitAmount =
+      livePrediction.walletDebitAmount ?? livePrediction.amount;
+    const nextBalance = liveUser.balance + refundedDebitAmount;
 
     transaction.delete(predictionRef);
 
@@ -353,17 +443,29 @@ export async function deletePrediction({
       updatedAt: serverTimestamp(),
     });
 
-    transaction.set(doc(collection(db, "transactions")), {
-      userId,
-      type: "bet_deleted_refund",
-      amount: livePrediction.amount,
-      balanceBefore: liveUser.balance,
-      balanceAfter: nextBalance,
-      referenceType: "match",
-      referenceId: match.id,
-      note: `Deleted prediction for match ${match.matchNumber}`,
-      createdAt: serverTimestamp(),
-    });
+    if (livePrediction.appliedRewardId) {
+      transaction.update(doc(db, "user_rewards", livePrediction.appliedRewardId), {
+        status: "available",
+        usedPredictionId: null,
+        usedMatchId: null,
+        usedAt: null,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    if (refundedDebitAmount > 0) {
+      transaction.set(doc(collection(db, "transactions")), {
+        userId,
+        type: "bet_deleted_refund",
+        amount: refundedDebitAmount,
+        balanceBefore: liveUser.balance,
+        balanceAfter: nextBalance,
+        referenceType: "match",
+        referenceId: match.id,
+        note: `Deleted prediction for match ${match.matchNumber}`,
+        createdAt: serverTimestamp(),
+      });
+    }
 
     if (
       referralRef &&
