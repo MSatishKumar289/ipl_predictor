@@ -66,6 +66,37 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /app_settings/{settingId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /weekly_spin_results/{resultId} {
+      allow get: if signedIn() &&
+        (
+          !exists(/databases/$(database)/documents/weekly_spin_results/$(resultId)) ||
+          resource.data.userId == request.auth.uid ||
+          isAdmin()
+        );
+      allow list: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /user_rewards/{rewardId} {
+      allow get: if signedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if signedIn();
+      allow create: if signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
     match /settlement_snapshots/{snapshotId} {
       allow read, create, update, delete: if isAdmin();
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 type StickyHeaderBarProps = {
   eyebrow?: string;
@@ -68,11 +68,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    shadowColor: "#020812",
-    shadowOpacity: 0.34,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+    ...(Platform.OS === "web"
+      ? {}
+      : {
+          shadowColor: "#020812",
+          shadowOpacity: 0.34,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 12 },
+          elevation: 10,
+        }),
   },
   shellCentered: {
     justifyContent: "center",

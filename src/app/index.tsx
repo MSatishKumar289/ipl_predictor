@@ -426,9 +426,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
     marginBottom: 14,
-    textShadowColor: "rgba(0, 0, 0, 0.45)",
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 8,
   },
   titleDesktop: {
     fontSize: 38,
@@ -547,11 +544,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E5AE0",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0B1325",
-    shadowOpacity: 0.4,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    ...(Platform.OS === "web"
+      ? {}
+      : {
+          shadowColor: "#0B1325",
+          shadowOpacity: 0.4,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 12 },
+          elevation: 8,
+        }),
   },
   buttonDisabled: {
     opacity: 0.7,

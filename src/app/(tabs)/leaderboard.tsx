@@ -16,16 +16,24 @@ import { CoinAmount } from "@/components/CoinAmount";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { subscribeToLeaderboardUsers } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
+import { getTimestampValue, subscribeToRecentSpinResults } from "@/lib/spin";
+import type { WeeklySpinResultRecord } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
+
+type LeaderboardViewTab = "leaderboard" | "spin_winners";
 
 export default function LeaderboardTab() {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
   const [users, setUsers] = useState<UserProfileRecord[]>([]);
+  const [spinResults, setSpinResults] = useState<WeeklySpinResultRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSpinLoading, setIsSpinLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [spinError, setSpinError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<LeaderboardViewTab>("leaderboard");
 
   useEffect(() => {
     const unsubscribe = subscribeToLeaderboardUsers(
@@ -44,6 +52,23 @@ export default function LeaderboardTab() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeToRecentSpinResults(
+      (nextResults) => {
+        setSpinResults(nextResults);
+        setSpinError(null);
+        setIsSpinLoading(false);
+      },
+      (snapshotError) => {
+        setSpinResults([]);
+        setSpinError(`Spin winners read failed: ${snapshotError.message}`);
+        setIsSpinLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
   const isDesktop = width >= 1024;
 
   const rankedUsers = useMemo(
@@ -53,6 +78,28 @@ export default function LeaderboardTab() {
         rank: index + 1,
       })),
     [users]
+  );
+
+  const userNameById = useMemo(
+    () =>
+      new Map(
+        rankedUsers.map((entry) => [entry.uid, entry.displayName] as const)
+      ),
+    [rankedUsers]
+  );
+
+  const winnersRows = useMemo(
+    () =>
+      spinResults
+        .filter((entry) => entry.rewardKind !== "miss")
+        .map((entry, index) => ({
+          id: entry.id,
+          rank: index + 1,
+          name: userNameById.get(entry.userId) ?? "Player",
+          reward: entry.rewardLabel,
+          createdAt: entry.createdAt,
+        })),
+    [spinResults, userNameById]
   );
 
   if (isLoading) {
@@ -82,14 +129,38 @@ export default function LeaderboardTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-          {error ? (
+          {activeTab === "leaderboard" && error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          {rankedUsers.length ? (
+          {activeTab === "spin_winners" && spinError ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Firestore error</Text>
+              <Text style={styles.errorText}>{spinError}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.tabsWrap}>
+            <View style={styles.tabBar}>
+              <LeaderboardTabButton
+                label="Leaderboard"
+                active={activeTab === "leaderboard"}
+                onPress={() => setActiveTab("leaderboard")}
+              />
+              <LeaderboardTabButton
+                label="Spin Winners"
+                active={activeTab === "spin_winners"}
+                onPress={() => setActiveTab("spin_winners")}
+              />
+            </View>
+            <View style={styles.tabsDivider} />
+          </View>
+
+          {activeTab === "leaderboard" ? (
+            rankedUsers.length ? (
             <View style={styles.tableCard}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
@@ -175,7 +246,7 @@ export default function LeaderboardTab() {
                 );
               })}
             </View>
-          ) : (
+            ) : (
             <View style={styles.tableCard}>
               <Text style={styles.listTitle}>Leaderboard</Text>
               <View style={styles.emptyCard}>
@@ -185,12 +256,85 @@ export default function LeaderboardTab() {
                 </Text>
               </View>
             </View>
+            )
+          ) : isSpinLoading ? (
+            <View style={styles.tableCard}>
+              <View style={styles.loadingInline}>
+                <ActivityIndicator size="small" color="#2463EB" />
+                <Text style={styles.loadingInlineText}>Loading spin winners...</Text>
+              </View>
+            </View>
+          ) : winnersRows.length ? (
+            <View style={styles.tableCard}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
+                <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
+                <Text style={[styles.tableHeaderText, styles.spinRewardCol]}>Reward</Text>
+                <Text style={[styles.tableHeaderText, styles.spinTimeCol]}>When</Text>
+              </View>
+              {winnersRows.map((entry) => (
+                <View key={entry.id} style={styles.tableRow}>
+                  <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>#{entry.rank}</Text>
+                  <View style={[styles.nameCol, styles.nameCell]}>
+                    <Text style={styles.nameText} numberOfLines={1}>
+                      {entry.name}
+                    </Text>
+                  </View>
+                  <Text style={[styles.tableCell, styles.spinRewardCol]} numberOfLines={1}>
+                    {entry.reward}
+                  </Text>
+                  <Text style={[styles.tableCell, styles.spinTimeCol]}>
+                    {formatSpinWinnerTime(entry.createdAt)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.tableCard}>
+              <Text style={styles.listTitle}>Spin Winners</Text>
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No winners yet</Text>
+                <Text style={styles.emptyText}>Recent winning spins will appear here.</Text>
+              </View>
+            </View>
           )}
         </View>
       </ScrollView>
       <AppMenuSheet visible={isMenuOpen} onClose={() => setIsMenuOpen(false)} />
     </SafeAreaView>
   );
+}
+
+function LeaderboardTabButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.tabButton} onPress={onPress}>
+      <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{label}</Text>
+      {active ? <View style={styles.tabButtonUnderline} /> : null}
+    </Pressable>
+  );
+}
+
+function formatSpinWinnerTime(value: unknown) {
+  const millis = getTimestampValue(value);
+
+  if (!millis) {
+    return "-";
+  }
+
+  return new Date(millis).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 const styles = StyleSheet.create({
@@ -218,6 +362,41 @@ const styles = StyleSheet.create({
     maxWidth: 1040,
     gap: 24,
   },
+  tabsWrap: {
+    gap: 8,
+  },
+  tabBar: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    gap: 22,
+  },
+  tabsDivider: {
+    borderBottomWidth: 2,
+    borderBottomColor: "#2B426A",
+  },
+  tabButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingBottom: 10,
+    position: "relative",
+  },
+  tabButtonText: {
+    color: "#9FB0CF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  tabButtonTextActive: {
+    color: "#2F7FFF",
+  },
+  tabButtonUnderline: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "#2F7FFF",
+  },
   loadingState: {
     flex: 1,
     alignItems: "center",
@@ -228,6 +407,17 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#D8E3FF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  loadingInline: {
+    minHeight: 120,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  loadingInlineText: {
+    color: "#D8E3FF",
+    fontSize: 14,
     fontWeight: "600",
   },
   errorCard: {
@@ -368,6 +558,17 @@ const styles = StyleSheet.create({
   balanceCol: {
     width: 86,
     textAlign: "right",
+  },
+  spinRewardCol: {
+    flex: 1,
+    paddingHorizontal: 6,
+  },
+  spinTimeCol: {
+    width: 88,
+    textAlign: "right",
+    color: "#9FB0CF",
+    fontSize: 12,
+    fontWeight: "600",
   },
   balanceCell: {
     color: "#73E2A8",
