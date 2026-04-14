@@ -1,0 +1,61 @@
+[debug] [2026-04-14T17:45:55.839Z] ----------------------------------------------------------------------
+[debug] [2026-04-14T17:45:55.843Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\M Sathis Kumar\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js auth:export .tmp-auth-export.json --format=json --project iplpredictor-36c70
+[debug] [2026-04-14T17:45:55.843Z] CLI Version:   15.11.0
+[debug] [2026-04-14T17:45:55.844Z] Platform:      win32
+[debug] [2026-04-14T17:45:55.844Z] Node Version:  v22.20.0
+[debug] [2026-04-14T17:45:55.844Z] Time:          Tue Apr 14 2026 23:15:55 GMT+0530 (India Standard Time)
+[debug] [2026-04-14T17:45:55.844Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-14T17:45:56.163Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-14T17:45:56.164Z] > authorizing via signed-in user (msatish289kumar@gmail.com)
+[debug] [2026-04-14T17:45:56.164Z] [iam] checking project iplpredictor-36c70 for permissions ["firebase.projects.get","firebaseauth.users.get"]
+[debug] [2026-04-14T17:45:56.166Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:45:56.167Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:45:56.168Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions [none]
+[debug] [2026-04-14T17:45:56.169Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions  x-goog-user-project=iplpredictor-36c70
+[debug] [2026-04-14T17:45:56.169Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions {"permissions":["firebase.projects.get","firebaseauth.users.get"]}
+[debug] [2026-04-14T17:45:57.608Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions 200
+[debug] [2026-04-14T17:45:57.609Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions {"permissions":["firebase.projects.get","firebaseauth.users.get"]}
+[info] Exporting accounts to .tmp-auth-export.json
+[debug] [2026-04-14T17:45:57.610Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:45:57.610Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:45:57.610Z] >>> [apiv2][query] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount [none]
+[debug] [2026-04-14T17:45:57.610Z] >>> [apiv2][body] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount {"targetProjectId":"iplpredictor-36c70","maxResults":1000}
+[debug] [2026-04-14T17:45:58.054Z] <<< [apiv2][status] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount 200
+[debug] [2026-04-14T17:45:58.054Z] <<< [apiv2][body] POST https://www.googleapis.com/identitytoolkit/v3/relyingparty/downloadAccount [omitted]
+[info] +  Exported 54 account(s) successfully. 
+[debug] [2026-04-14T17:48:11.185Z] ----------------------------------------------------------------------
+[debug] [2026-04-14T17:48:11.188Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\M Sathis Kumar\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js firestore:delete --project iplpredictor-36c70 --force weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3
+[debug] [2026-04-14T17:48:11.189Z] CLI Version:   15.11.0
+[debug] [2026-04-14T17:48:11.189Z] Platform:      win32
+[debug] [2026-04-14T17:48:11.189Z] Node Version:  v22.20.0
+[debug] [2026-04-14T17:48:11.189Z] Time:          Tue Apr 14 2026 23:18:11 GMT+0530 (India Standard Time)
+[debug] [2026-04-14T17:48:11.189Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-14T17:48:13.204Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-14T17:48:13.205Z] > authorizing via signed-in user (msatish289kumar@gmail.com)
+[debug] [2026-04-14T17:48:13.206Z] [iam] checking project iplpredictor-36c70 for permissions ["datastore.entities.delete","datastore.entities.list","firebase.projects.get"]
+[debug] [2026-04-14T17:48:13.208Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:13.208Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:13.210Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions [none]
+[debug] [2026-04-14T17:48:13.210Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions  x-goog-user-project=iplpredictor-36c70
+[debug] [2026-04-14T17:48:13.211Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions {"permissions":["datastore.entities.delete","datastore.entities.list","firebase.projects.get"]}
+[debug] [2026-04-14T17:48:14.543Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions 200
+[debug] [2026-04-14T17:48:14.544Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/iplpredictor-36c70:testIamPermissions {"permissions":["datastore.entities.delete","datastore.entities.list","firebase.projects.get"]}
+[debug] [2026-04-14T17:48:14.545Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:14.545Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:14.546Z] >>> [apiv2][query] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery [none]
+[debug] [2026-04-14T17:48:14.546Z] >>> [apiv2][body] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery {"structuredQuery":{"limit":1,"from":[{"allDescendants":true}],"select":{"fields":[{"fieldPath":"__name__"}]},"orderBy":[{"field":{"fieldPath":"__name__"}}]}}
+[debug] [2026-04-14T17:48:14.900Z] <<< [apiv2][status] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery 200
+[debug] [2026-04-14T17:48:14.901Z] <<< [apiv2][body] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery [{"readTime":"2026-04-14T17:48:15.031698Z"}]
+[debug] [2026-04-14T17:48:14.901Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:14.901Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:14.902Z] >>> [apiv2][query] DELETE https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3 [none]
+[debug] [2026-04-14T17:48:15.056Z] <<< [apiv2][status] DELETE https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3 200
+[debug] [2026-04-14T17:48:15.056Z] <<< [apiv2][body] DELETE https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3 {}
+[debug] [2026-04-14T17:48:15.059Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:15.060Z] Checked if tokens are valid: true, expires at: 1776191527310
+[debug] [2026-04-14T17:48:15.060Z] >>> [apiv2][query] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery [none]
+[debug] [2026-04-14T17:48:15.060Z] >>> [apiv2][body] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery {"structuredQuery":{"limit":7500,"from":[{"allDescendants":false}],"select":{"fields":[{"fieldPath":"__name__"}]},"orderBy":[{"field":{"fieldPath":"__name__"}}]}}
+[debug] [2026-04-14T17:48:15.215Z] <<< [apiv2][status] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery 200
+[debug] [2026-04-14T17:48:15.215Z] <<< [apiv2][body] POST https://firestore.googleapis.com/v1/projects/iplpredictor-36c70/databases/(default)/documents/weekly_spin_results/2026-04-13_tAYIxN9sCmhR4Kg6Eou4zxPZPcF3:runQuery [{"readTime":"2026-04-14T17:48:15.339014Z"}]

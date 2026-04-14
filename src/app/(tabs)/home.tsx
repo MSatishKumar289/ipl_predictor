@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
@@ -20,6 +20,7 @@ import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
+import { getWeeklySpinStatus } from "@/lib/spin";
 import { useAuth } from "@/providers/AuthProvider";
 
 type MatchFilter = "upcoming" | "live" | "completed";
@@ -41,6 +42,8 @@ export default function HomeTab() {
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
+  const [isSpinLoading, setIsSpinLoading] = useState(true);
+  const [isSpinEligible, setIsSpinEligible] = useState(false);
   const isDesktop = width >= 1024;
 
   useEffect(() => {
@@ -87,6 +90,48 @@ export default function HomeTab() {
     return unsubscribe;
   }, [user]);
 
+  useFocusEffect(() => {
+    let isActive = true;
+
+    if (!user) {
+      setIsSpinEligible(false);
+      setIsSpinLoading(false);
+
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setIsSpinLoading(true);
+
+    void getWeeklySpinStatus(user.uid)
+      .then((status) => {
+        if (!isActive) {
+          return;
+        }
+
+        setIsSpinEligible(status.eligible);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setIsSpinEligible(false);
+      })
+      .finally(() => {
+        if (!isActive) {
+          return;
+        }
+
+        setIsSpinLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  });
+
   const sections = useMemo(() => buildSections(matches), [matches]);
 
   const activeMatches =
@@ -123,6 +168,22 @@ export default function HomeTab() {
               style={styles.balanceValueRow}
             />
           </View>
+
+          {!isSpinLoading && isSpinEligible ? (
+            <Pressable style={styles.spinCard} onPress={() => router.push("/weekly-spin")}>
+              <View style={styles.spinCardBody}>
+                <Text style={styles.spinEyebrow}>Weekly Contest</Text>
+                <Text style={styles.spinTitle}>Spin The Wheel</Text>
+                <Text style={styles.spinText}>
+                  You have 1 weekly spin available. Try for coins, points, Free Bet Ticket, or
+                  Bet Insurance.
+                </Text>
+              </View>
+              <View style={styles.spinActionPill}>
+                <Text style={styles.spinActionText}>Spin Now</Text>
+              </View>
+            </Pressable>
+          ) : null}
 
           <View style={styles.matchesSection}>
             <View style={styles.matchesHeader}>
@@ -429,6 +490,47 @@ const styles = StyleSheet.create({
   },
   matchesSection: {
     gap: 18,
+  },
+  spinCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#556D1E",
+    backgroundColor: "#22340D",
+    padding: 20,
+    gap: 16,
+  },
+  spinCardBody: {
+    gap: 8,
+  },
+  spinEyebrow: {
+    color: "#C9E77D",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+  },
+  spinTitle: {
+    color: "#F7FAFF",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  spinText: {
+    color: "#D8E5BB",
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  spinActionPill: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "#F2B84B",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  spinActionText: {
+    color: "#102042",
+    fontSize: 14,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   matchesHeader: {
     flexDirection: "row",

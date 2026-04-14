@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" fill="none">
+  <defs>
+    <linearGradient id="spinFill" x1="22" y1="22" x2="158" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1E3D8F" />
+      <stop offset="1" stop-color="#0F275F" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="90" cy="90" r="68" fill="url(#spinFill)" stroke="#F2F2F2" stroke-width="4" />
+  <polygon points="90,0 65,24 115,24" fill="#FFFFFF" />
+
+  <text
+    x="90"
+    y="90"
+    text-anchor="middle"
+    dy=".35em"
+    fill="#FFFFFF"
+    font-family="Lato, Arial, sans-serif"
+    font-size="26"
+    font-weight="800"
+    letter-spacing="1"
+  >
+    SPIN
+  </text>
+</svg>

@@ -131,6 +131,16 @@ export default function ProfileTab() {
             </View>
           </View>
 
+          <Pressable style={styles.rewardsCard} onPress={() => router.push("/rewards")}>
+            <View style={styles.rewardsCardBody}>
+              <Text style={styles.rewardsCardTitle}>Rewards</Text>
+              <Text style={styles.rewardsCardText}>
+                Track your active rewards, used benefits, and weekly spin history.
+              </Text>
+            </View>
+            <Text style={styles.rewardsCardAction}>Open</Text>
+          </Pressable>
+
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Current Balance</Text>
             <CoinAmount
@@ -600,5 +610,36 @@ const styles = StyleSheet.create({
     color: "#F7FAFF",
     fontSize: 16,
     fontWeight: "800",
+  },
+  rewardsCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#355AA8",
+    backgroundColor: "#102042",
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  rewardsCardBody: {
+    flex: 1,
+    gap: 6,
+  },
+  rewardsCardTitle: {
+    color: "#F7FAFF",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  rewardsCardText: {
+    color: "#8EA0C1",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  rewardsCardAction: {
+    color: "#F2B84B",
+    fontSize: 15,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
 });

@@ -20,6 +20,7 @@ import { createReferral } from "@/lib/referrals";
 
 const menuItems: { label: string; href?: Href; action?: () => Promise<void> }[] = [
   { label: "Fixtures", href: "/fixtures" },
+  { label: "Rewards", href: "/rewards" },
   { label: "Transactions", href: "/transactions" },
   { label: "My Referrals", href: "/my-referrals" },
   { label: "Refer a Friend" },

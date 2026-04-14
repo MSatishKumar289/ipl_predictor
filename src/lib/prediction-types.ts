@@ -9,6 +9,11 @@ export type PredictionRecord = {
   userDisplayName: string;
   selectedTeam: PredictionSelection;
   amount: number;
+  walletDebitAmount: number;
+  appliedRewardId?: string | null;
+  appliedRewardType?: "free_bet_ticket" | "bet_insurance" | null;
+  appliedRewardLabel?: string | null;
+  appliedRewardCapAmount?: number | null;
   status: PredictionStatus;
   payout: number;
   profit: number;

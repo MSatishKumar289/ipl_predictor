@@ -263,13 +263,14 @@ function isVisibleTransaction(
   if (
     entry.type === "bet_edit_refund" ||
     entry.type === "bet_edit_placed" ||
+    entry.type === "bet_edit_placed_with_free_ticket" ||
     entry.type === "bet_deleted_refund" ||
     entry.type === "match_refund_no_result"
   ) {
     return false;
   }
 
-  if (entry.type !== "bet_placed") {
+  if (entry.type !== "bet_placed" && entry.type !== "bet_placed_with_free_ticket") {
     return true;
   }
 
@@ -289,7 +290,11 @@ function getVisibleTransactions(
   const latestBetPlacedByMatch = new Map<string, string>();
 
   for (const entry of transactions) {
-    if (entry.type !== "bet_placed" || entry.referenceType !== "match" || !entry.referenceId) {
+    if (
+      (entry.type !== "bet_placed" && entry.type !== "bet_placed_with_free_ticket") ||
+      entry.referenceType !== "match" ||
+      !entry.referenceId
+    ) {
       continue;
     }
 
@@ -303,7 +308,11 @@ function getVisibleTransactions(
       return false;
     }
 
-    if (entry.type !== "bet_placed" || entry.referenceType !== "match" || !entry.referenceId) {
+    if (
+      (entry.type !== "bet_placed" && entry.type !== "bet_placed_with_free_ticket") ||
+      entry.referenceType !== "match" ||
+      !entry.referenceId
+    ) {
       return true;
     }
 
@@ -323,8 +332,11 @@ function getLinkedPrediction(
 }
 
 function getDisplayAmount(entry: TransactionRecord, prediction: PredictionRecord | null) {
-  if (entry.type === "bet_placed" && prediction) {
-    return -prediction.amount;
+  if (
+    (entry.type === "bet_placed" || entry.type === "bet_placed_with_free_ticket") &&
+    prediction
+  ) {
+    return -(prediction.walletDebitAmount ?? prediction.amount);
   }
 
   return entry.amount;
@@ -415,6 +427,10 @@ function formatDescription(entry: TransactionRecord) {
 
   if (entry.referenceType === "referral") {
     return "Referral Bonus";
+  }
+
+  if (entry.referenceType === "weekly_spin") {
+    return "Weekly Spin";
   }
 
   return "System";
