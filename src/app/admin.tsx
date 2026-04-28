@@ -36,11 +36,15 @@ import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/i
 import type { MatchRecord } from "@/lib/match-types";
 import type { UserProfileRecord } from "@/lib/auth-types";
 import {
+  createWeeklySpinCampaign,
   DEFAULT_WEEKLY_SPIN_AUDIENCE,
+  deleteWeeklySpinCampaign,
+  publishWeeklySpinCampaign,
+  subscribeToWeeklySpinCampaigns,
   subscribeToWeeklySpinConfig,
   updateWeeklySpinConfig,
 } from "@/lib/spin";
-import type { WeeklySpinAudience } from "@/lib/spin-types";
+import type { WeeklySpinAudience, WeeklySpinCampaignRecord } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type PendingSettlement = {
@@ -55,6 +59,12 @@ type PendingRevert = {
 } | null;
 
 type PickerMode = "date" | "time" | null;
+type CampaignPickerTarget =
+  | "start_date"
+  | "start_time"
+  | "end_date"
+  | "end_time"
+  | null;
 type AdminMatchView = "live" | "results";
 type AdminSection = "users" | "create_match" | "manage_match" | "weekly_spin";
 
@@ -90,6 +100,15 @@ export default function AdminScreen() {
   const [weeklySpinAudience, setWeeklySpinAudience] =
     useState<WeeklySpinAudience>(DEFAULT_WEEKLY_SPIN_AUDIENCE);
   const [isSavingWeeklySpin, setIsSavingWeeklySpin] = useState(false);
+  const [weeklySpinCampaigns, setWeeklySpinCampaigns] = useState<WeeklySpinCampaignRecord[]>([]);
+  const [campaignStartDate, setCampaignStartDate] = useState("");
+  const [campaignStartTime, setCampaignStartTime] = useState("");
+  const [campaignEndDate, setCampaignEndDate] = useState("");
+  const [campaignEndTime, setCampaignEndTime] = useState("");
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [campaignPickerTarget, setCampaignPickerTarget] = useState<CampaignPickerTarget>(null);
+  const [selectedCampaign, setSelectedCampaign] = useState<WeeklySpinCampaignRecord | null>(null);
+  const [isCampaignActionLoading, setIsCampaignActionLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -135,6 +154,28 @@ export default function AdminScreen() {
       },
       () => {
         setWeeklySpinAudience(DEFAULT_WEEKLY_SPIN_AUDIENCE);
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000);
+    setCampaignStartDate(formatDateValue(now));
+    setCampaignStartTime(formatTimeValue(now));
+    setCampaignEndDate(formatDateValue(end));
+    setCampaignEndTime(formatTimeValue(end));
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToWeeklySpinCampaigns(
+      (nextCampaigns) => {
+        setWeeklySpinCampaigns(nextCampaigns);
+      },
+      () => {
+        setWeeklySpinCampaigns([]);
       }
     );
 
@@ -374,6 +415,54 @@ export default function AdminScreen() {
     }
   }
 
+  async function handleCreateWeeklySpinCampaign() {
+    if (
+      !campaignStartDate.trim() ||
+      !campaignStartTime.trim() ||
+      !campaignEndDate.trim() ||
+      !campaignEndTime.trim()
+    ) {
+      Alert.alert("Missing details", "Fill start and end date/time for the campaign.");
+      return;
+    }
+
+    const startAt = new Date(`${campaignStartDate}T${campaignStartTime}:00+05:30`);
+    const endAt = new Date(`${campaignEndDate}T${campaignEndTime}:00+05:30`);
+
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+      Alert.alert("Invalid date", "Use YYYY-MM-DD and HH:MM in 24-hour format.");
+      return;
+    }
+
+    if (endAt <= startAt) {
+      Alert.alert("Invalid range", "End date/time must be after start date/time.");
+      return;
+    }
+
+    if (isCreatingCampaign) {
+      return;
+    }
+
+    try {
+      setIsCreatingCampaign(true);
+      await createWeeklySpinCampaign({
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        createdBy: adminUserId,
+      });
+      const nextDefaultEnd = new Date(startAt.getTime() + 4 * 24 * 60 * 60 * 1000);
+      setCampaignEndDate(formatDateValue(nextDefaultEnd));
+      setCampaignEndTime(formatTimeValue(nextDefaultEnd));
+      Alert.alert("Campaign created", "Weekly spin campaign saved successfully.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to create weekly spin campaign.";
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsCreatingCampaign(false);
+    }
+  }
+
   function openPicker(mode: Exclude<PickerMode, null>) {
     const seed = buildPickerSeed(matchDate, matchTime);
     setPickerValue(seed);
@@ -396,6 +485,80 @@ export default function AdminScreen() {
 
     setPickerValue(nextValue);
     setPickerMode(null);
+  }
+
+  function openCampaignPicker(target: Exclude<CampaignPickerTarget, null>, mode: Exclude<PickerMode, null>) {
+    const seed =
+      target === "start_date" || target === "start_time"
+        ? buildPickerSeed(campaignStartDate, campaignStartTime)
+        : buildPickerSeed(campaignEndDate, campaignEndTime);
+    setPickerValue(seed);
+    setCampaignPickerTarget(target);
+    setPickerMode(mode);
+  }
+
+  function handleCampaignPickerChange(nextValue?: Date) {
+    if (!nextValue) {
+      setPickerMode(null);
+      setCampaignPickerTarget(null);
+      return;
+    }
+
+    if (campaignPickerTarget === "start_date") {
+      setCampaignStartDate(formatDateValue(nextValue));
+    } else if (campaignPickerTarget === "start_time") {
+      const nextStartTime = formatTimeValue(nextValue);
+      setCampaignStartTime(nextStartTime);
+
+      const startSeed = buildPickerSeed(campaignStartDate, nextStartTime);
+      const nextDefaultEnd = new Date(startSeed.getTime() + 4 * 24 * 60 * 60 * 1000);
+      setCampaignEndDate(formatDateValue(nextDefaultEnd));
+      setCampaignEndTime(formatTimeValue(nextDefaultEnd));
+    } else if (campaignPickerTarget === "end_date") {
+      setCampaignEndDate(formatDateValue(nextValue));
+    } else if (campaignPickerTarget === "end_time") {
+      setCampaignEndTime(formatTimeValue(nextValue));
+    }
+
+    setPickerValue(nextValue);
+    setPickerMode(null);
+    setCampaignPickerTarget(null);
+  }
+
+  async function handlePublishCampaign(campaign: WeeklySpinCampaignRecord) {
+    if (isCampaignActionLoading) {
+      return;
+    }
+
+    try {
+      setIsCampaignActionLoading(true);
+      await publishWeeklySpinCampaign(campaign.id, adminUserId);
+      setSelectedCampaign(null);
+      Alert.alert("Campaign published", `Campaign #${campaign.campaignNumber} is now active.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to publish campaign.";
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsCampaignActionLoading(false);
+    }
+  }
+
+  async function handleDeleteCampaign(campaign: WeeklySpinCampaignRecord) {
+    if (isCampaignActionLoading) {
+      return;
+    }
+
+    try {
+      setIsCampaignActionLoading(true);
+      await deleteWeeklySpinCampaign(campaign.id, adminUserId);
+      setSelectedCampaign(null);
+      Alert.alert("Campaign deleted", `Campaign #${campaign.campaignNumber} was deleted.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete campaign.";
+      Alert.alert("Delete failed", message);
+    } finally {
+      setIsCampaignActionLoading(false);
+    }
   }
 
   const NativeDateTimePicker =
@@ -536,6 +699,44 @@ export default function AdminScreen() {
             <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
           </Pressable>
         </ScrollView>
+      </View>
+    </View>
+  ) : null;
+  const campaignDialog = selectedCampaign ? (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setSelectedCampaign(null)} />
+      <View style={styles.confirmCard}>
+        <Text style={styles.confirmTitle}>Campaign #{selectedCampaign.campaignNumber}</Text>
+        <Text style={styles.confirmText}>Publish or delete this campaign?</Text>
+        <Text style={styles.confirmHint}>
+          Start: {formatMatchDate(selectedCampaign.startAt)}{"\n"}
+          End: {formatMatchDate(selectedCampaign.endAt)}
+        </Text>
+        <Pressable
+          style={[styles.confirmPrimaryButton, isCampaignActionLoading && styles.buttonDisabled]}
+          onPress={() => void handlePublishCampaign(selectedCampaign)}
+          disabled={isCampaignActionLoading}
+        >
+          {isCampaignActionLoading ? (
+            <ActivityIndicator size="small" color="#F7FAFF" />
+          ) : (
+            <Text style={styles.confirmPrimaryButtonText}>Publish Campaign</Text>
+          )}
+        </Pressable>
+        <Pressable
+          style={[styles.confirmDangerButton, isCampaignActionLoading && styles.buttonDisabled]}
+          onPress={() => void handleDeleteCampaign(selectedCampaign)}
+          disabled={isCampaignActionLoading}
+        >
+          <Text style={styles.confirmPrimaryButtonText}>Delete</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.confirmSecondaryButton, isCampaignActionLoading && styles.buttonDisabled]}
+          onPress={() => setSelectedCampaign(null)}
+          disabled={isCampaignActionLoading}
+        >
+          <Text style={styles.confirmSecondaryButtonText}>Cancel</Text>
+        </Pressable>
       </View>
     </View>
   ) : null;
@@ -872,18 +1073,151 @@ export default function AdminScreen() {
                     compact
                   />
                 </View>
-                <View style={styles.selectionSummaryCard}>
+                <View style={styles.weeklySpinFlatSection}>
                   <Text style={styles.selectionSummaryTitle}>Current Mode</Text>
                   <Text style={styles.selectionSummaryText}>
                     {weeklySpinAudience === "disabled"
                       ? "No user can see Weekly Spin."
                       : weeklySpinAudience === "all_active_users"
                         ? "Users who have played at least one match can see Weekly Spin."
-                        : "Only users who have played at least 30% of completed matches can see Weekly Spin."}
+                        : "Only users who have played at least 35% of completed matches can see Weekly Spin."}
                   </Text>
                   {isSavingWeeklySpin ? (
                     <Text style={styles.selectionSummaryText}>Saving changes...</Text>
                   ) : null}
+                </View>
+                <View style={styles.weeklySpinFlatSection}>
+                  <Text style={styles.selectionSummaryTitle}>Create Spin Campaign</Text>
+                  <Text style={styles.selectorLabel}>Start Date</Text>
+                  {Platform.OS === "web" ? (
+                    <WebDateTimeInput
+                      type="date"
+                      value={campaignStartDate}
+                      onChange={setCampaignStartDate}
+                      placeholder="YYYY-MM-DD"
+                    />
+                  ) : (
+                    <Pressable
+                      style={styles.inputButton}
+                      onPress={() => openCampaignPicker("start_date", "date")}
+                    >
+                      <Text style={[styles.inputButtonText, !campaignStartDate && styles.placeholderText]}>
+                        {campaignStartDate || "YYYY-MM-DD"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Text style={styles.selectorLabel}>Start Time</Text>
+                  {Platform.OS === "web" ? (
+                    <WebDateTimeInput
+                      type="time"
+                      value={campaignStartTime}
+                      onChange={setCampaignStartTime}
+                      placeholder="HH:MM"
+                    />
+                  ) : (
+                    <Pressable
+                      style={styles.inputButton}
+                      onPress={() => openCampaignPicker("start_time", "time")}
+                    >
+                      <Text style={[styles.inputButtonText, !campaignStartTime && styles.placeholderText]}>
+                        {campaignStartTime || "HH:MM"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Text style={styles.selectorLabel}>End Date</Text>
+                  {Platform.OS === "web" ? (
+                    <WebDateTimeInput
+                      type="date"
+                      value={campaignEndDate}
+                      onChange={setCampaignEndDate}
+                      placeholder="YYYY-MM-DD"
+                    />
+                  ) : (
+                    <Pressable
+                      style={styles.inputButton}
+                      onPress={() => openCampaignPicker("end_date", "date")}
+                    >
+                      <Text style={[styles.inputButtonText, !campaignEndDate && styles.placeholderText]}>
+                        {campaignEndDate || "YYYY-MM-DD"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Text style={styles.selectorLabel}>End Time</Text>
+                  {Platform.OS === "web" ? (
+                    <WebDateTimeInput
+                      type="time"
+                      value={campaignEndTime}
+                      onChange={setCampaignEndTime}
+                      placeholder="HH:MM"
+                    />
+                  ) : (
+                    <Pressable
+                      style={styles.inputButton}
+                      onPress={() => openCampaignPicker("end_time", "time")}
+                    >
+                      <Text style={[styles.inputButtonText, !campaignEndTime && styles.placeholderText]}>
+                        {campaignEndTime || "HH:MM"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={[styles.primaryButton, isCreatingCampaign && styles.buttonDisabled]}
+                    onPress={() => void handleCreateWeeklySpinCampaign()}
+                    disabled={isCreatingCampaign}
+                  >
+                    {isCreatingCampaign ? (
+                      <ActivityIndicator size="small" color="#F7FAFF" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Save Campaign</Text>
+                    )}
+                  </Pressable>
+                </View>
+                <View style={styles.weeklySpinFlatSection}>
+                  <Text style={styles.selectionSummaryTitle}>Campaign History</Text>
+                  <View style={styles.campaignTable}>
+                    <View style={styles.campaignTableHeader}>
+                      <View style={[styles.campaignCell, styles.campaignNumberCol]}>
+                        <Text style={styles.userTableHeaderText}>#</Text>
+                      </View>
+                      <View style={[styles.campaignCell, styles.campaignStartCol]}>
+                        <Text style={styles.userTableHeaderText}>Start</Text>
+                      </View>
+                      <View style={[styles.campaignCell, styles.campaignEndCol]}>
+                        <Text style={styles.userTableHeaderText}>End</Text>
+                      </View>
+                      <View style={[styles.campaignCell, styles.campaignStatusCol]}>
+                        <Text style={styles.userTableHeaderText}>Status</Text>
+                      </View>
+                    </View>
+                    {weeklySpinCampaigns.length ? (
+                      weeklySpinCampaigns.map((campaign) => (
+                        <Pressable
+                          key={campaign.id}
+                          style={styles.campaignTableRow}
+                          onPress={() => setSelectedCampaign(campaign)}
+                        >
+                          <View style={[styles.campaignCell, styles.campaignNumberCol]}>
+                            <Text style={styles.userTablePrimary}>{campaign.campaignNumber}</Text>
+                          </View>
+                          <View style={[styles.campaignCell, styles.campaignStartCol]}>
+                            <Text style={styles.userTableText}>{formatMatchDate(campaign.startAt)}</Text>
+                          </View>
+                          <View style={[styles.campaignCell, styles.campaignEndCol]}>
+                            <Text style={styles.userTableText}>{formatMatchDate(campaign.endAt)}</Text>
+                          </View>
+                          <View style={[styles.campaignCell, styles.campaignStatusCol]}>
+                            <Text style={styles.userTableText}>{campaign.status}</Text>
+                          </View>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <View style={styles.campaignTableRow}>
+                        <View style={styles.campaignEmptyCell}>
+                          <Text style={styles.userTableMuted}>No campaigns created yet.</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
             ) : (
@@ -945,6 +1279,7 @@ export default function AdminScreen() {
           {settlementDialog}
           {revertDialog}
           {userDialog}
+          {campaignDialog}
         </>
       ) : (
         <>
@@ -972,6 +1307,14 @@ export default function AdminScreen() {
           >
             {userDialog}
           </Modal>
+          <Modal
+            visible={!!selectedCampaign}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setSelectedCampaign(null)}
+          >
+            {campaignDialog}
+          </Modal>
         </>
       )}
 
@@ -984,6 +1327,11 @@ export default function AdminScreen() {
           onChange={(event: { type?: string }, date?: Date) => {
             if (event.type === "dismissed") {
               setPickerMode(null);
+              return;
+            }
+
+            if (campaignPickerTarget) {
+              handleCampaignPickerChange(date);
               return;
             }
 
@@ -1353,6 +1701,52 @@ const styles = StyleSheet.create({
     backgroundColor: "#0E1B36",
     padding: 16,
     gap: 6,
+  },
+  weeklySpinFlatSection: {
+    gap: 10,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  campaignTable: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#223A63",
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  campaignTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#0E1B36",
+    borderBottomWidth: 1,
+    borderBottomColor: "#223A63",
+  },
+  campaignTableRow: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#223A63",
+    backgroundColor: "#102042",
+  },
+  campaignCell: {
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    justifyContent: "center",
+  },
+  campaignNumberCol: {
+    flex: 0.5,
+  },
+  campaignStartCol: {
+    flex: 1.4,
+  },
+  campaignEndCol: {
+    flex: 1.4,
+  },
+  campaignStatusCol: {
+    flex: 0.9,
+  },
+  campaignEmptyCell: {
+    width: "100%",
+    paddingHorizontal: 8,
+    paddingVertical: 12,
   },
   selectionSummaryTitle: {
     color: "#F7FAFF",

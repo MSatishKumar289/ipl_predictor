@@ -517,13 +517,26 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       }
 
       if (prediction.selectedTeam === winner) {
-        const payout = prediction.amount * 2;
+        const hasDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
+        const hasDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
+        const payoutMultiplier = hasDoubleCoinBoost ? 2 : 1;
+        const pointsMultiplier = hasDoublePointsBoost ? 2 : 1;
+        const payout = prediction.amount * 2 * payoutMultiplier;
+        const pointsAwarded = WIN_POINTS * pointsMultiplier;
+        const wheelPointsBonus = hasDoublePointsBoost ? WIN_POINTS : 0;
+        const wheelCoinsBonus = hasDoubleCoinBoost ? prediction.amount * 2 : 0;
         const nextBalance = userData.balance + payout;
+        const nextWheelPointsEarned = (userData.wheelPointsEarned ?? 0) + wheelPointsBonus;
+        const nextWheelCoinsEarned = (userData.wheelCoinsEarned ?? 0) + wheelCoinsBonus;
 
         transaction.update(userRef, {
           balance: nextBalance,
-          points: userData.points + WIN_POINTS,
+          points: userData.points + pointsAwarded,
           wins: userData.wins + 1,
+          wheelPointsEarned: nextWheelPointsEarned,
+          wheelCoinsEarned: nextWheelCoinsEarned,
+          hasPendingDoublePointsNextWin: hasDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
+          hasPendingDoubleCoinNextMatchWin: hasDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
           updatedAt: serverTimestamp(),
         });
 
@@ -590,12 +603,18 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         prediction.appliedRewardType === "bet_insurance" && prediction.appliedRewardCapAmount
           ? Math.min(prediction.amount, prediction.appliedRewardCapAmount)
           : 0;
+      const insuranceBonusPoints = insuranceRefund > 0 ? 1 : 0;
       const walletDebitAmount = prediction.walletDebitAmount ?? prediction.amount;
       const nextBalance = userData.balance + insuranceRefund;
+      const hasDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
+      const hasDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
 
       transaction.update(userRef, {
         balance: nextBalance,
         losses: userData.losses + 1,
+        points: userData.points + insuranceBonusPoints,
+        hasPendingDoublePointsNextWin: hasDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
+        hasPendingDoubleCoinNextMatchWin: hasDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
         updatedAt: serverTimestamp(),
       });
 
@@ -617,6 +636,18 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
           referenceType: "match",
           referenceId: matchId,
           note: `Bet Insurance refund for match ${latestMatch.matchNumber}`,
+          createdAt: serverTimestamp(),
+        });
+
+        transaction.set(doc(collection(db, "transactions")), {
+          userId: prediction.userId,
+          type: "bet_insurance_bonus_point",
+          amount: insuranceBonusPoints,
+          balanceBefore: nextBalance,
+          balanceAfter: nextBalance,
+          referenceType: "match",
+          referenceId: matchId,
+          note: `Bet Insurance bonus: +${insuranceBonusPoints} point for match ${latestMatch.matchNumber}`,
           createdAt: serverTimestamp(),
         });
       }

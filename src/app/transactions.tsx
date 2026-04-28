@@ -352,7 +352,8 @@ function TransactionRow({
   isCompact: boolean;
 }) {
   const displayAmount = getDisplayAmount(entry, prediction);
-  const isCredit = displayAmount > 0;
+  const isPointTransaction = entry.type === "bet_insurance_bonus_point";
+  const isCredit = displayAmount > 0 || isPointTransaction;
 
   return (
     <View style={[styles.row, isCompact && styles.rowCompact]}>
@@ -361,16 +362,20 @@ function TransactionRow({
       </Text>
 
       <View style={[styles.amountCol, isCompact && styles.amountColCompact, styles.amountCell]}>
-        <CoinAmount
-          value={Math.abs(displayAmount).toLocaleString("en-IN")}
-          prefix={isCredit ? "+" : "-"}
-          color={isCredit ? "#4AE39A" : "#F6B1B1"}
-          size={13}
-          weight="800"
-          iconSize={11}
-          align="center"
-          textStyle={styles.rowAmount}
-        />
+        {isPointTransaction ? (
+          <Text style={[styles.rowAmount, styles.operationCreditText]}>+{displayAmount} Pt</Text>
+        ) : (
+          <CoinAmount
+            value={Math.abs(displayAmount).toLocaleString("en-IN")}
+            prefix={isCredit ? "+" : "-"}
+            color={isCredit ? "#4AE39A" : "#F6B1B1"}
+            size={13}
+            weight="800"
+            iconSize={11}
+            align="center"
+            textStyle={styles.rowAmount}
+          />
+        )}
       </View>
 
       <View
@@ -420,6 +425,10 @@ function SummaryCard({
 }
 
 function formatDescription(entry: TransactionRecord) {
+  if (entry.type === "bet_insurance_bonus_point") {
+    return "Bet Insurance Bonus (+1 Pt)";
+  }
+
   if (entry.referenceType === "match") {
     const matchNumber = entry.note.match(/match\s+(\d+)/i)?.[1];
     return matchNumber ? `Match ${matchNumber}` : "Match";

@@ -196,21 +196,11 @@ export async function placeOrEditPrediction({
     const availableBalance = liveUser.balance + previousWalletDebitAmount;
     const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
 
-    if (
-      appliedReward?.type === "free_bet_ticket" &&
-      amount > appliedReward.capAmount
-    ) {
-      throw new Error(
-        `Free Bet Ticket can only be used for bets up to ${appliedReward.capAmount.toLocaleString("en-IN")} coins.`
-      );
-    }
-
     const nextWalletDebitAmount =
       appliedReward?.type === "free_bet_ticket" ? 0 : amount;
     const nextBalance = availableBalance - nextWalletDebitAmount;
 
     if (
-      appliedReward?.type !== "free_bet_ticket" &&
       maximumAllowedBet !== null &&
       amount > maximumAllowedBet
     ) {

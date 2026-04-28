@@ -86,7 +86,6 @@ export default function RewardsScreen() {
     activeTab === "available"
       ? {
           title: "Available Rewards",
-          hint: "Rewards you can use on upcoming predictions.",
           rows: activeRewardRows,
           primaryHeader: "Reward",
           secondaryHeader: "Use",
@@ -96,7 +95,6 @@ export default function RewardsScreen() {
       : activeTab === "used"
         ? {
             title: "Used Rewards",
-            hint: "Rewards already consumed on previous bets.",
             rows: usedRewardRows,
             primaryHeader: "Reward",
             secondaryHeader: "Last Used",
@@ -105,7 +103,6 @@ export default function RewardsScreen() {
           }
         : {
             title: "Weekly Spin History",
-            hint: "Each weekly cycle and the reward revealed.",
             rows: spinHistoryRows,
             primaryHeader: "Result",
             secondaryHeader: "Cycle",
@@ -153,7 +150,6 @@ export default function RewardsScreen() {
 
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>{tabMeta.title}</Text>
-            <Text style={styles.sectionHint}>{tabMeta.hint}</Text>
             <RewardsTable
               rows={tabMeta.rows}
               primaryHeader={tabMeta.primaryHeader}

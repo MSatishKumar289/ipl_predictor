@@ -15,6 +15,8 @@ import {
 import { db } from "./firebase";
 import type { PredictionRecord } from "./prediction-types";
 import type {
+  WeeklySpinCampaignRecord,
+  WeeklySpinCampaignStatus,
   WeeklySpinAudience,
   WeeklySpinConfig,
   UserRewardRecord,
@@ -25,8 +27,9 @@ import type {
 } from "./spin-types";
 
 const INDIA_OFFSET_MINUTES = 330;
-const WEEKLY_SPIN_PARTICIPATION_THRESHOLD = 0.3;
+const WEEKLY_SPIN_PARTICIPATION_THRESHOLD = 0.35;
 const WEEKLY_SPIN_CONFIG_DOC = doc(db, "app_settings", "weekly_spin");
+const WEEKLY_SPIN_CAMPAIGNS_COLLECTION = collection(db, "weekly_spin_campaigns");
 
 export const SPECIAL_REWARD_CAP_AMOUNT = 8000;
 export const DEFAULT_WEEKLY_SPIN_AUDIENCE: WeeklySpinAudience = "all_active_users";
@@ -34,18 +37,25 @@ export const DEFAULT_WEEKLY_SPIN_AUDIENCE: WeeklySpinAudience = "all_active_user
 export const WEEKLY_SPIN_SEGMENTS: WeeklySpinSegmentConfig[] = [
   { id: "coins_5000", label: "5000 Coins", kind: "coins", value: 5000, capAmount: null, weight: 18 },
   { id: "coins_10000", label: "10000 Coins", kind: "coins", value: 10000, capAmount: null, weight: 14 },
-  { id: "miss_a", label: "Better luck next time", kind: "miss", value: null, capAmount: null, weight: 28 },
+  {
+    id: "points_x2_next_win",
+    label: "Points x2 on next win",
+    kind: "points_x2_next_win",
+    value: null,
+    capAmount: null,
+    weight: 28,
+  },
   { id: "coins_30000", label: "30000 Coins", kind: "coins", value: 30000, capAmount: null, weight: 1 },
   { id: "coins_1000", label: "1000 Coins", kind: "coins", value: 1000, capAmount: null, weight: 20 },
   { id: "points_2", label: "2 Points", kind: "points", value: 2, capAmount: null, weight: 2 },
-  { id: "miss_b", label: "Better luck next time", kind: "miss", value: null, capAmount: null, weight: 24 },
+  { id: "spin_again", label: "Spin Again", kind: "spin_again", value: null, capAmount: null, weight: 24 },
   { id: "points_5", label: "5 Points", kind: "points", value: 5, capAmount: null, weight: 1 },
   {
     id: "ticket_a",
     label: "Free Bet Ticket",
     kind: "free_bet_ticket",
     value: null,
-    capAmount: SPECIAL_REWARD_CAP_AMOUNT,
+    capAmount: null,
     weight: 5,
   },
   {
@@ -56,13 +66,20 @@ export const WEEKLY_SPIN_SEGMENTS: WeeklySpinSegmentConfig[] = [
     capAmount: SPECIAL_REWARD_CAP_AMOUNT,
     weight: 5,
   },
-  { id: "miss_c", label: "Better luck next time", kind: "miss", value: null, capAmount: null, weight: 24 },
+  {
+    id: "coins_x2_next_match_win",
+    label: "Coins x2 on next match win",
+    kind: "coins_x2_next_match_win",
+    value: null,
+    capAmount: null,
+    weight: 24,
+  },
   {
     id: "ticket_b",
     label: "Free Bet Ticket",
     kind: "free_bet_ticket",
     value: null,
-    capAmount: SPECIAL_REWARD_CAP_AMOUNT,
+    capAmount: null,
     weight: 6,
   },
 ];
@@ -117,12 +134,13 @@ export function getWeeklySpinCycleId(now = new Date()) {
   )}`;
 }
 
-export function formatSpinRewardLabel(type: UserRewardType, capAmount: number) {
+export function formatSpinRewardLabel(type: UserRewardType, capAmount: number | null) {
   if (type === "free_bet_ticket") {
-    return `Free Bet Ticket (${capAmount.toLocaleString("en-IN")} cap)`;
+    return "Free Bet Ticket";
   }
 
-  return `Bet Insurance (${capAmount.toLocaleString("en-IN")} cap)`;
+  const resolvedCapAmount = capAmount ?? SPECIAL_REWARD_CAP_AMOUNT;
+  return `Bet Insurance (${resolvedCapAmount.toLocaleString("en-IN")} cap)`;
 }
 
 function normalizeSpinResult(snapshot: { id: string; data: Omit<WeeklySpinResultRecord, "id"> }) {
@@ -139,12 +157,14 @@ function normalizeUserReward(snapshot: { id: string; data: Omit<UserRewardRecord
   } satisfies UserRewardRecord;
 }
 
-function pickWeightedSegment() {
-  const totalWeight = WEEKLY_SPIN_SEGMENTS.reduce((sum, segment) => sum + segment.weight, 0);
+function pickWeightedSegment(
+  segments: WeeklySpinSegmentConfig[] = WEEKLY_SPIN_SEGMENTS
+) {
+  const totalWeight = segments.reduce((sum, segment) => sum + segment.weight, 0);
   let cursor = Math.random() * totalWeight;
 
-  for (let index = 0; index < WEEKLY_SPIN_SEGMENTS.length; index += 1) {
-    const segment = WEEKLY_SPIN_SEGMENTS[index];
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
     cursor -= segment.weight;
 
     if (cursor <= 0) {
@@ -153,9 +173,48 @@ function pickWeightedSegment() {
   }
 
   return {
-    segment: WEEKLY_SPIN_SEGMENTS[WEEKLY_SPIN_SEGMENTS.length - 1],
-    segmentIndex: WEEKLY_SPIN_SEGMENTS.length - 1,
+    segment: segments[segments.length - 1],
+    segmentIndex: segments.length - 1,
   };
+}
+
+function normalizeWeeklySpinCampaignStatus(value: unknown): WeeklySpinCampaignStatus {
+  return value === "scheduled" || value === "live" || value === "ended" || value === "cancelled"
+    ? value
+    : "scheduled";
+}
+
+function normalizeWeeklySpinCampaign(snapshot: {
+  id: string;
+  data: Omit<WeeklySpinCampaignRecord, "id">;
+}): WeeklySpinCampaignRecord {
+  return {
+    id: snapshot.id,
+    campaignNumber: Number(snapshot.data.campaignNumber) || 0,
+    startAt: snapshot.data.startAt,
+    endAt: snapshot.data.endAt,
+    status: normalizeWeeklySpinCampaignStatus(snapshot.data.status),
+    createdBy: snapshot.data.createdBy,
+    updatedBy: snapshot.data.updatedBy ?? null,
+    createdAt: snapshot.data.createdAt,
+    updatedAt: snapshot.data.updatedAt,
+  };
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function resolveCampaignStatus(startAt: string, endAt: string, referenceIso = nowIso()) {
+  if (referenceIso < startAt) {
+    return "scheduled" as const;
+  }
+
+  if (referenceIso >= endAt) {
+    return "ended" as const;
+  }
+
+  return "live" as const;
 }
 
 async function getCompletedMatchIds() {
@@ -167,16 +226,35 @@ async function getCompletedMatchIds() {
 }
 
 export async function getWeeklySpinStatus(userId: string): Promise<WeeklySpinStatus> {
-  const cycleId = getWeeklySpinCycleId();
-  const [configSnapshot, completedMatchIds, predictionSnapshot, spinSnapshot] = await Promise.all([
+  const fallbackCycleId = getWeeklySpinCycleId();
+  const [configSnapshot, completedMatchIds, predictionSnapshot, campaignsSnapshot] = await Promise.all([
     getDoc(WEEKLY_SPIN_CONFIG_DOC),
     getCompletedMatchIds(),
     getDocs(query(collection(db, "predictions"), where("userId", "==", userId))),
-    getDoc(doc(db, "weekly_spin_results", `${cycleId}_${userId}`)),
+    getDocs(query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(100))),
   ]);
   const config = normalizeWeeklySpinConfig(
     configSnapshot.exists() ? (configSnapshot.data() as Partial<WeeklySpinConfig>) : null
   );
+  const campaigns = campaignsSnapshot.docs
+    .map((entry) =>
+      normalizeWeeklySpinCampaign({
+        id: entry.id,
+        data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+      })
+    )
+    .filter((entry) => entry.status !== "cancelled");
+  const referenceIso = nowIso();
+  const activeCampaignByTime =
+    campaigns.find((entry) => entry.startAt <= referenceIso && referenceIso < entry.endAt) ?? null;
+  const activeCampaign =
+    activeCampaignByTime && config.activeCampaignId === activeCampaignByTime.id
+      ? activeCampaignByTime
+      : null;
+  const cycleId = activeCampaign ? `campaign_${activeCampaign.campaignNumber}` : fallbackCycleId;
+  const spinSnapshot = activeCampaign
+    ? await getDoc(doc(db, "weekly_spin_results", `${cycleId}_${userId}`))
+    : null;
 
   const completedMatchIdSet = new Set(completedMatchIds);
   const playedMatchIds = new Set(
@@ -194,7 +272,7 @@ export async function getWeeklySpinStatus(userId: string): Promise<WeeklySpinSta
   const participationRate =
     totalCompletedMatches > 0 ? playedCompletedMatches / totalCompletedMatches : 0;
   const playedAnyMatch = playedMatchIds.size > 0;
-  const result = spinSnapshot.exists()
+  const result = spinSnapshot?.exists()
     ? normalizeSpinResult({
         id: spinSnapshot.id,
         data: spinSnapshot.data() as Omit<WeeklySpinResultRecord, "id">,
@@ -203,8 +281,13 @@ export async function getWeeklySpinStatus(userId: string): Promise<WeeklySpinSta
 
   return {
     cycleId,
+    campaignId: activeCampaign?.id ?? null,
+    campaignNumber: activeCampaign?.campaignNumber ?? null,
     audience: config.audience,
-    eligible: !result && isEligibleForAudience(config.audience, playedAnyMatch, totalCompletedMatches, participationRate),
+    eligible:
+      !!activeCampaign &&
+      !result &&
+      isEligibleForAudience(config.audience, playedAnyMatch, totalCompletedMatches, participationRate),
     hasUsedSpin: !!result,
     playedAnyMatch,
     totalCompletedMatches,
@@ -274,6 +357,181 @@ export async function updateWeeklySpinConfig(audience: WeeklySpinAudience, updat
   });
 }
 
+export async function createWeeklySpinCampaign({
+  startAt,
+  endAt,
+  createdBy,
+}: {
+  startAt: string;
+  endAt: string;
+  createdBy: string;
+}) {
+  if (!startAt || !endAt) {
+    throw new Error("Start and end date/time are required.");
+  }
+
+  if (endAt <= startAt) {
+    throw new Error("End date/time must be after start date/time.");
+  }
+
+  const campaignSnapshots = await getDocs(
+    query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(200))
+  );
+  const campaigns = campaignSnapshots.docs.map((entry) =>
+    normalizeWeeklySpinCampaign({
+      id: entry.id,
+      data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+    })
+  );
+  const overlappingCampaign = campaigns.find((entry) => {
+    if (entry.status === "cancelled") {
+      return false;
+    }
+
+    return startAt < entry.endAt && endAt > entry.startAt;
+  });
+
+  if (overlappingCampaign) {
+    throw new Error("Campaign dates overlap with an existing campaign. Please change date/time.");
+  }
+
+  const nextCampaignNumber =
+    campaigns.reduce((max, entry) => Math.max(max, entry.campaignNumber), 0) + 1;
+
+  await runTransaction(db, async (transaction) => {
+    const latestCampaignSnapshots = await getDocs(
+      query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(200))
+    );
+    const latestCampaigns = latestCampaignSnapshots.docs.map((entry) =>
+      normalizeWeeklySpinCampaign({
+        id: entry.id,
+        data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+      })
+    );
+    const overlappingCampaign = latestCampaigns.find((entry) => {
+      if (entry.status === "cancelled") {
+        return false;
+      }
+
+      return startAt < entry.endAt && endAt > entry.startAt;
+    });
+
+    if (overlappingCampaign) {
+      throw new Error("Campaign dates overlap with an existing campaign. Please change date/time.");
+    }
+    const latestMaxCampaignNumber = latestCampaigns.reduce(
+      (max, entry) => Math.max(max, entry.campaignNumber),
+      0
+    );
+    const resolvedCampaignNumber = Math.max(nextCampaignNumber, latestMaxCampaignNumber + 1);
+    const campaignRef = doc(WEEKLY_SPIN_CAMPAIGNS_COLLECTION);
+
+    transaction.set(campaignRef, {
+      campaignNumber: resolvedCampaignNumber,
+      startAt,
+      endAt,
+      status: "scheduled",
+      createdBy,
+      updatedBy: createdBy,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    } satisfies Omit<WeeklySpinCampaignRecord, "id">);
+  });
+}
+
+export async function publishWeeklySpinCampaign(campaignId: string, updatedBy: string) {
+  const campaignRef = doc(db, "weekly_spin_campaigns", campaignId);
+  await runTransaction(db, async (transaction) => {
+    const campaignSnapshot = await transaction.get(campaignRef);
+    if (!campaignSnapshot.exists()) {
+      throw new Error("Campaign not found.");
+    }
+
+    const campaign = normalizeWeeklySpinCampaign({
+      id: campaignSnapshot.id,
+      data: campaignSnapshot.data() as Omit<WeeklySpinCampaignRecord, "id">,
+    });
+
+    transaction.set(
+      WEEKLY_SPIN_CONFIG_DOC,
+      {
+        activeCampaignId: campaign.id,
+        activeCampaignNumber: campaign.campaignNumber,
+        activeCampaignStartAt: campaign.startAt,
+        activeCampaignEndAt: campaign.endAt,
+        updatedAt: serverTimestamp(),
+        updatedBy,
+      } satisfies Partial<WeeklySpinConfig>,
+      { merge: true }
+    );
+  });
+}
+
+export async function deleteWeeklySpinCampaign(campaignId: string, updatedBy: string) {
+  const campaignRef = doc(db, "weekly_spin_campaigns", campaignId);
+  await runTransaction(db, async (transaction) => {
+    const [campaignSnapshot, configSnapshot] = await Promise.all([
+      transaction.get(campaignRef),
+      transaction.get(WEEKLY_SPIN_CONFIG_DOC),
+    ]);
+    if (!campaignSnapshot.exists()) {
+      throw new Error("Campaign not found.");
+    }
+
+    const config = normalizeWeeklySpinConfig(
+      configSnapshot.exists() ? (configSnapshot.data() as Partial<WeeklySpinConfig>) : null
+    );
+    transaction.delete(campaignRef);
+
+    if (config.activeCampaignId === campaignId) {
+      transaction.set(
+        WEEKLY_SPIN_CONFIG_DOC,
+        {
+          activeCampaignId: null,
+          activeCampaignNumber: null,
+          activeCampaignStartAt: null,
+          activeCampaignEndAt: null,
+          updatedAt: serverTimestamp(),
+          updatedBy,
+        } satisfies Partial<WeeklySpinConfig>,
+        { merge: true }
+      );
+    }
+  });
+}
+
+export function subscribeToWeeklySpinCampaigns(
+  callback: (campaigns: WeeklySpinCampaignRecord[]) => void,
+  onError?: (error: Error) => void
+) {
+  return onSnapshot(
+    query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(100)),
+    (snapshot) => {
+      const referenceIso = nowIso();
+      callback(
+        snapshot.docs.map((entry) => {
+          const normalized = normalizeWeeklySpinCampaign({
+            id: entry.id,
+            data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+          });
+
+          if (normalized.status === "cancelled") {
+            return normalized;
+          }
+
+          return {
+            ...normalized,
+            status: resolveCampaignStatus(normalized.startAt, normalized.endAt, referenceIso),
+          };
+        })
+      );
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+}
+
 export async function spinWeeklyWheel(userId: string) {
   const status = await getWeeklySpinStatus(userId);
 
@@ -281,14 +539,11 @@ export async function spinWeeklyWheel(userId: string) {
     throw new Error("You are not eligible for this week's spin.");
   }
 
-  const { segment, segmentIndex } = pickWeightedSegment();
   const cycleId = status.cycleId;
   const resultRef = doc(db, "weekly_spin_results", `${cycleId}_${userId}`);
   const userRef = doc(db, "users", userId);
-  const rewardRef =
-    segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance"
-      ? doc(collection(db, "user_rewards"))
-      : null;
+  let resolvedSegment: WeeklySpinSegmentConfig | null = null;
+  let resolvedSegmentIndex = -1;
 
   await runTransaction(db, async (transaction) => {
     const [existingResultSnapshot, userSnapshot] = await Promise.all([
@@ -307,7 +562,53 @@ export async function spinWeeklyWheel(userId: string) {
     const userData = userSnapshot.data() as {
       balance: number;
       points: number;
+      hasReceivedSpinAgain?: boolean;
+      hasPendingDoublePointsNextWin?: boolean;
+      hasPendingDoubleCoinNextMatchWin?: boolean;
+      wheelPointsEarned?: number;
+      wheelCoinsEarned?: number;
     };
+    const hasReceivedSpinAgain = !!userData.hasReceivedSpinAgain;
+    const eligibleSegments = WEEKLY_SPIN_SEGMENTS.filter(
+      (entry) => entry.kind !== "spin_again" || !hasReceivedSpinAgain
+    );
+
+    if (!eligibleSegments.length) {
+      throw new Error("No eligible weekly spin rewards configured.");
+    }
+
+    let { segment } = pickWeightedSegment(eligibleSegments);
+    let segmentIndex = WEEKLY_SPIN_SEGMENTS.findIndex((entry) => entry.id === segment.id);
+
+    if (segmentIndex < 0) {
+      throw new Error("Spin segment configuration is invalid.");
+    }
+
+    if (segment.kind === "spin_again") {
+      const rerollSegments = WEEKLY_SPIN_SEGMENTS.filter((entry) => entry.kind !== "spin_again");
+      if (!rerollSegments.length) {
+        throw new Error("Spin Again requires at least one non Spin Again segment.");
+      }
+
+      const reroll = pickWeightedSegment(rerollSegments);
+      segment = reroll.segment;
+      segmentIndex = WEEKLY_SPIN_SEGMENTS.findIndex((entry) => entry.id === segment.id);
+      if (segmentIndex < 0) {
+        throw new Error("Spin segment configuration is invalid.");
+      }
+
+      transaction.update(userRef, {
+        hasReceivedSpinAgain: true,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    resolvedSegment = segment;
+    resolvedSegmentIndex = segmentIndex;
+    const rewardRef =
+      segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance"
+        ? doc(collection(db, "user_rewards"))
+        : null;
 
     const resultPayload = {
       userId,
@@ -326,9 +627,11 @@ export async function spinWeeklyWheel(userId: string) {
 
     if (segment.kind === "coins" && segment.value) {
       const nextBalance = userData.balance + segment.value;
+      const nextWheelCoinsEarned = (userData.wheelCoinsEarned ?? 0) + segment.value;
 
       transaction.update(userRef, {
         balance: nextBalance,
+        wheelCoinsEarned: nextWheelCoinsEarned,
         updatedAt: serverTimestamp(),
       });
 
@@ -348,8 +651,10 @@ export async function spinWeeklyWheel(userId: string) {
     }
 
     if (segment.kind === "points" && segment.value) {
+      const nextWheelPointsEarned = (userData.wheelPointsEarned ?? 0) + segment.value;
       transaction.update(userRef, {
         points: userData.points + segment.value,
+        wheelPointsEarned: nextWheelPointsEarned,
         updatedAt: serverTimestamp(),
       });
 
@@ -358,8 +663,7 @@ export async function spinWeeklyWheel(userId: string) {
 
     if (
       rewardRef &&
-      (segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance") &&
-      segment.capAmount
+      (segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance")
     ) {
       transaction.set(rewardRef, {
         userId,
@@ -376,8 +680,29 @@ export async function spinWeeklyWheel(userId: string) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       } satisfies Omit<UserRewardRecord, "id">);
+      return;
+    }
+
+    if (segment.kind === "points_x2_next_win") {
+      transaction.update(userRef, {
+        hasPendingDoublePointsNextWin: true,
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    if (segment.kind === "coins_x2_next_match_win") {
+      transaction.update(userRef, {
+        hasPendingDoubleCoinNextMatchWin: true,
+        updatedAt: serverTimestamp(),
+      });
     }
   });
+
+  if (!resolvedSegment || resolvedSegmentIndex < 0) {
+    throw new Error("Unable to resolve weekly spin reward.");
+  }
+  const finalSegment = resolvedSegment as WeeklySpinSegmentConfig;
 
   return {
     ...status,
@@ -387,12 +712,12 @@ export async function spinWeeklyWheel(userId: string) {
       id: `${cycleId}_${userId}`,
       userId,
       cycleId,
-      rewardId: segment.id,
-      rewardLabel: segment.label,
-      rewardKind: segment.kind,
-      rewardValue: segment.value,
-      rewardCapAmount: segment.capAmount,
-      segmentIndex,
+      rewardId: finalSegment.id,
+      rewardLabel: finalSegment.label,
+      rewardKind: finalSegment.kind,
+      rewardValue: finalSegment.value,
+      rewardCapAmount: finalSegment.capAmount,
+      segmentIndex: resolvedSegmentIndex,
     } satisfies WeeklySpinResultRecord,
   };
 }
@@ -528,8 +853,9 @@ export function getTimestampValue(value: unknown) {
 
 export function formatRewardUsageLabel(reward: UserRewardRecord) {
   if (reward.type === "free_bet_ticket") {
-    return `Free Bet Ticket up to ${reward.capAmount.toLocaleString("en-IN")} coins`;
+    return "Free Bet Ticket";
   }
 
-  return `Bet Insurance up to ${reward.capAmount.toLocaleString("en-IN")} coins`;
+  const resolvedCapAmount = reward.capAmount ?? SPECIAL_REWARD_CAP_AMOUNT;
+  return `Bet Insurance up to ${resolvedCapAmount.toLocaleString("en-IN")} coins`;
 }
