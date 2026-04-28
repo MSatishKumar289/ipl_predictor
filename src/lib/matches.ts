@@ -24,7 +24,13 @@ import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 const MATCH_LOCK_MINUTES = 35;
 const BETTING_OPEN_HOURS = 24;
 const WIN_POINTS = 3;
-const SETTLEMENT_TRANSACTION_TYPES = new Set(["match_win_payout", "match_refund_no_result"]);
+const LEADERBOARD_PARTICIPATION_THRESHOLD = 0.35;
+const INACTIVITY_PENALTY_POINTS = 1;
+const SETTLEMENT_TRANSACTION_TYPES = new Set([
+  "match_win_payout",
+  "match_refund_no_result",
+  "match_inactivity_penalty",
+]);
 
 type SettlementSnapshotMeta = {
   matchId: string;
@@ -703,6 +709,92 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       updatedAt: serverTimestamp(),
     });
   });
+
+  if (winner !== "no_result") {
+    await applyInactivityPenaltyForMatch(matchId, match.matchNumber);
+  }
+}
+
+async function applyInactivityPenaltyForMatch(matchId: string, matchNumber: number) {
+  const [usersSnapshot, predictionsSnapshot, matchesSnapshot, currentMatchPredictionsSnapshot] =
+    await Promise.all([
+      getDocs(collection(db, "users")),
+      getDocs(collection(db, "predictions")),
+      getDocs(collection(db, "matches")),
+      getDocs(query(collection(db, "predictions"), where("matchId", "==", matchId))),
+    ]);
+  const usersWhoPlayedThisMatch = new Set(
+    currentMatchPredictionsSnapshot.docs
+      .map((entry) => (entry.data() as Omit<PredictionRecord, "id">).userId)
+      .filter((userId): userId is string => !!userId)
+  );
+  const completedMatchIdSet = new Set(
+    matchesSnapshot.docs
+      .filter((entry) => {
+        const status = (entry.data() as { status?: string }).status;
+        return status === "completed" || status === "settled" || status === "no_result";
+      })
+      .map((entry) => entry.id)
+  );
+  const totalCompletedMatches = completedMatchIdSet.size;
+
+  if (totalCompletedMatches <= 0) {
+    return;
+  }
+
+  const playedCompletedMatchesByUser = new Map<string, Set<string>>();
+
+  for (const entry of predictionsSnapshot.docs) {
+    const data = entry.data() as Omit<PredictionRecord, "id">;
+    if (!data.userId || !data.matchId || !completedMatchIdSet.has(data.matchId)) {
+      continue;
+    }
+
+    const playedMatches = playedCompletedMatchesByUser.get(data.userId) ?? new Set<string>();
+    playedMatches.add(data.matchId);
+    playedCompletedMatchesByUser.set(data.userId, playedMatches);
+  }
+
+  const batch = writeBatch(db);
+
+  for (const userSnapshot of usersSnapshot.docs) {
+    const userId = userSnapshot.id;
+
+    if (usersWhoPlayedThisMatch.has(userId)) {
+      continue;
+    }
+
+    const userData = userSnapshot.data() as UserProfile;
+    if ((userData.totalPredictions ?? 0) <= 0) {
+      continue;
+    }
+
+    const playedCompletedMatches = playedCompletedMatchesByUser.get(userId)?.size ?? 0;
+    const participationRate = playedCompletedMatches / totalCompletedMatches;
+
+    if (participationRate < LEADERBOARD_PARTICIPATION_THRESHOLD) {
+      continue;
+    }
+
+    batch.update(doc(db, "users", userId), {
+      points: userData.points - INACTIVITY_PENALTY_POINTS,
+      updatedAt: serverTimestamp(),
+    });
+
+    batch.set(doc(collection(db, "transactions")), {
+      userId,
+      type: "match_inactivity_penalty",
+      amount: -INACTIVITY_PENALTY_POINTS,
+      balanceBefore: userData.balance,
+      balanceAfter: userData.balance,
+      referenceType: "match",
+      referenceId: matchId,
+      note: `Inactivity penalty: -${INACTIVITY_PENALTY_POINTS} point for match ${matchNumber}`,
+      createdAt: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
 }
 
 export function subscribeToSettlementBackupAvailability(
