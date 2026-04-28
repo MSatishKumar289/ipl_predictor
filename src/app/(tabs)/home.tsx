@@ -20,7 +20,11 @@ import { getBettingState, subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
-import { getWeeklySpinStatus } from "@/lib/spin";
+import {
+  getNextScheduledWeeklySpinCampaign,
+  getWeeklySpinStatus,
+  hasUserPlayedAnyWeeklySpin,
+} from "@/lib/spin";
 import { useAuth } from "@/providers/AuthProvider";
 
 type MatchFilter = "upcoming" | "live" | "completed";
@@ -44,6 +48,9 @@ export default function HomeTab() {
   const [isClientReady, setIsClientReady] = useState(false);
   const [isSpinLoading, setIsSpinLoading] = useState(true);
   const [isSpinEligible, setIsSpinEligible] = useState(false);
+  const [hasUsedSpin, setHasUsedSpin] = useState(false);
+  const [nextSpinStartAt, setNextSpinStartAt] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(Date.now());
   const isDesktop = width >= 1024;
 
   useEffect(() => {
@@ -105,12 +112,28 @@ export default function HomeTab() {
     setIsSpinLoading(true);
 
     void getWeeklySpinStatus(user.uid)
-      .then((status) => {
+      .then(async (status) => {
         if (!isActive) {
           return;
         }
 
         setIsSpinEligible(status.eligible);
+        const hasPlayedAnySpin = status.hasUsedSpin || (await hasUserPlayedAnyWeeklySpin(user.uid));
+        if (!isActive) {
+          return;
+        }
+        setHasUsedSpin(hasPlayedAnySpin);
+
+        if (hasPlayedAnySpin) {
+          const nextCampaign = await getNextScheduledWeeklySpinCampaign();
+          if (!isActive) {
+            return;
+          }
+          setNextSpinStartAt(nextCampaign?.startAt ?? null);
+          return;
+        }
+
+        setNextSpinStartAt(null);
       })
       .catch(() => {
         if (!isActive) {
@@ -118,6 +141,8 @@ export default function HomeTab() {
         }
 
         setIsSpinEligible(false);
+        setHasUsedSpin(false);
+        setNextSpinStartAt(null);
       })
       .finally(() => {
         if (!isActive) {
@@ -132,6 +157,20 @@ export default function HomeTab() {
     };
   });
 
+  useEffect(() => {
+    if (!hasUsedSpin || !nextSpinStartAt) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [hasUsedSpin, nextSpinStartAt]);
+
   const sections = useMemo(() => buildSections(matches), [matches]);
 
   const activeMatches =
@@ -141,6 +180,10 @@ export default function HomeTab() {
         ? sections.live
         : sections.completed;
   const visibleMatches = activeFilter === "upcoming" ? sections.upcoming.slice(0, 3) : activeMatches;
+  const nextSpinStartMs = nextSpinStartAt ? Date.parse(nextSpinStartAt) : 0;
+  const nextSpinCountdownSeconds = nextSpinStartAt
+    ? Math.max(0, Math.floor((nextSpinStartMs - nowMs) / 1000))
+    : 0;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -183,6 +226,13 @@ export default function HomeTab() {
                 <Text style={styles.spinActionText}>Spin Now</Text>
               </View>
             </Pressable>
+          ) : null}
+
+          {!isSpinLoading && hasUsedSpin && nextSpinCountdownSeconds > 0 ? (
+            <View style={styles.nextSpinCard}>
+              <Text style={styles.nextSpinLabel}>Next Spin</Text>
+              <Text style={styles.nextSpinCountdown}>{formatCountdown(nextSpinCountdownSeconds)}</Text>
+            </View>
           ) : null}
 
           <View style={styles.matchesSection}>
@@ -405,6 +455,23 @@ function getCollapsedScheduleLabel(match: MatchRecord) {
   }).format(new Date(match.startAt));
 }
 
+function formatCountdown(totalSeconds: number) {
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
 function openMatch(matchId: string) {
   router.push({
     pathname: "/match/[id]",
@@ -531,6 +598,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     textTransform: "uppercase",
+  },
+  nextSpinCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#2A4A78",
+    backgroundColor: "#12294F",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  nextSpinLabel: {
+    color: "#AFC0DE",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  nextSpinCountdown: {
+    color: "#66DDA1",
+    fontSize: 14,
+    fontWeight: "800",
   },
   matchesHeader: {
     flexDirection: "row",

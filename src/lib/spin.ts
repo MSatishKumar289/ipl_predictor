@@ -500,6 +500,35 @@ export async function deleteWeeklySpinCampaign(campaignId: string, updatedBy: st
   });
 }
 
+export async function getNextScheduledWeeklySpinCampaign(
+  referenceDate = new Date()
+): Promise<WeeklySpinCampaignRecord | null> {
+  const referenceIso = referenceDate.toISOString();
+  const snapshot = await getDocs(
+    query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(100))
+  );
+
+  const upcoming = snapshot.docs
+    .map((entry) =>
+      normalizeWeeklySpinCampaign({
+        id: entry.id,
+        data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+      })
+    )
+    .filter((entry) => entry.status !== "cancelled" && entry.startAt > referenceIso)
+    .sort((left, right) => left.startAt.localeCompare(right.startAt));
+
+  if (!upcoming.length) {
+    return null;
+  }
+
+  const nextCampaign = upcoming[0];
+  return {
+    ...nextCampaign,
+    status: resolveCampaignStatus(nextCampaign.startAt, nextCampaign.endAt, referenceIso),
+  };
+}
+
 export function subscribeToWeeklySpinCampaigns(
   callback: (campaigns: WeeklySpinCampaignRecord[]) => void,
   onError?: (error: Error) => void
@@ -795,6 +824,13 @@ export function subscribeToWeeklySpinHistory(
       onError?.(error);
     }
   );
+}
+
+export async function hasUserPlayedAnyWeeklySpin(userId: string): Promise<boolean> {
+  const snapshot = await getDocs(
+    query(collection(db, "weekly_spin_results"), where("userId", "==", userId), limit(1))
+  );
+  return !snapshot.empty;
 }
 
 export function subscribeToRecentSpinResults(
