@@ -15,6 +15,11 @@ export type UserProfile = {
   wins: number;
   losses: number;
   totalPredictions: number;
+  hasReceivedSpinAgain?: boolean;
+  hasPendingDoublePointsNextWin?: boolean;
+  hasPendingDoubleCoinNextMatchWin?: boolean;
+  wheelPointsEarned?: number;
+  wheelCoinsEarned?: number;
 };
 
 export type UserProfileRecord = UserProfile & {

@@ -86,6 +86,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /weekly_spin_campaigns/{campaignId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /user_rewards/{rewardId} {
       allow get: if signedIn() &&
         (resource.data.userId == request.auth.uid || isAdmin());
