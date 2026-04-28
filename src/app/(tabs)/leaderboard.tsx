@@ -20,12 +20,13 @@ import { getTimestampValue, subscribeToRecentSpinResults } from "@/lib/spin";
 import type { WeeklySpinResultRecord } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
-type LeaderboardViewTab = "leaderboard" | "spin_winners";
+type LeaderboardViewTab = "leaderboard" | "unlisted_users" | "spin_winners";
 
 export default function LeaderboardTab() {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
-  const [users, setUsers] = useState<UserProfileRecord[]>([]);
+  const [listedUsers, setListedUsers] = useState<UserProfileRecord[]>([]);
+  const [unlistedUsers, setUnlistedUsers] = useState<UserProfileRecord[]>([]);
   const [spinResults, setSpinResults] = useState<WeeklySpinResultRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSpinLoading, setIsSpinLoading] = useState(true);
@@ -37,13 +38,15 @@ export default function LeaderboardTab() {
 
   useEffect(() => {
     const unsubscribe = subscribeToLeaderboardUsers(
-      (nextUsers) => {
-        setUsers(nextUsers);
+      ({ listedUsers: nextListedUsers, unlistedUsers: nextUnlistedUsers }) => {
+        setListedUsers(nextListedUsers);
+        setUnlistedUsers(nextUnlistedUsers);
         setError(null);
         setIsLoading(false);
       },
       (snapshotError) => {
-        setUsers([]);
+        setListedUsers([]);
+        setUnlistedUsers([]);
         setError(`Leaderboard read failed: ${snapshotError.message}`);
         setIsLoading(false);
       }
@@ -71,13 +74,18 @@ export default function LeaderboardTab() {
 
   const isDesktop = width >= 1024;
 
+  const activeUsers = useMemo(
+    () => (activeTab === "unlisted_users" ? unlistedUsers : listedUsers),
+    [activeTab, listedUsers, unlistedUsers]
+  );
+
   const rankedUsers = useMemo(
     () =>
-      users.map((entry, index) => ({
+      activeUsers.map((entry, index) => ({
         ...entry,
         rank: index + 1,
       })),
-    [users]
+    [activeUsers]
   );
 
   const userNameById = useMemo(
@@ -129,7 +137,7 @@ export default function LeaderboardTab() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.pageShell, isDesktop && styles.pageShellDesktop]}>
-          {activeTab === "leaderboard" && error ? (
+          {(activeTab === "leaderboard" || activeTab === "unlisted_users") && error ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Firestore error</Text>
               <Text style={styles.errorText}>{error}</Text>
@@ -151,6 +159,11 @@ export default function LeaderboardTab() {
                 onPress={() => setActiveTab("leaderboard")}
               />
               <LeaderboardTabButton
+                label="Unranked Users"
+                active={activeTab === "unlisted_users"}
+                onPress={() => setActiveTab("unlisted_users")}
+              />
+              <LeaderboardTabButton
                 label="Spin Winners"
                 active={activeTab === "spin_winners"}
                 onPress={() => setActiveTab("spin_winners")}
@@ -159,7 +172,7 @@ export default function LeaderboardTab() {
             <View style={styles.tabsDivider} />
           </View>
 
-          {activeTab === "leaderboard" ? (
+          {activeTab === "leaderboard" || activeTab === "unlisted_users" ? (
             rankedUsers.length ? (
             <View style={styles.tableCard}>
               <View style={styles.tableHeader}>
@@ -170,6 +183,14 @@ export default function LeaderboardTab() {
                   <>
                     <Text style={[styles.tableHeaderText, styles.recordCol]}>W/L</Text>
                     <Text style={[styles.tableHeaderText, styles.picksCol]}>Picks</Text>
+                    <View style={[styles.metricHeaderCol, styles.wheelPointsCol]}>
+                      <Text style={styles.metricEmoji}>🎡</Text>
+                      <Text style={styles.tableHeaderText}>Pts</Text>
+                    </View>
+                    <View style={[styles.metricHeaderCol, styles.wheelCoinsCol]}>
+                      <Text style={styles.metricEmoji}>🎡</Text>
+                      <Text style={styles.tableHeaderText}>Coin</Text>
+                    </View>
                   </>
                 ) : null}
                 <Text style={[styles.tableHeaderText, styles.balanceCol]}>Pocket</Text>
@@ -191,6 +212,18 @@ export default function LeaderboardTab() {
                       {entry.wins}/{entry.losses}
                     </Text>
                     <Text style={[styles.tableCell, styles.picksCol]}>{entry.totalPredictions}</Text>
+                    <View style={[styles.metricCell, styles.wheelPointsCol]}>
+                      <Text style={styles.metricEmoji}>🎡</Text>
+                      <Text style={[styles.tableCell, styles.metricValue]}>
+                        {(entry.wheelPointsEarned ?? 0).toLocaleString("en-IN")}
+                      </Text>
+                    </View>
+                    <View style={[styles.metricCell, styles.wheelCoinsCol]}>
+                      <Text style={styles.metricEmoji}>🎡</Text>
+                      <Text style={[styles.tableCell, styles.metricValue]}>
+                        {(entry.wheelCoinsEarned ?? 0).toLocaleString("en-IN")}
+                      </Text>
+                    </View>
                     <CoinAmount
                       value={entry.balance.toLocaleString("en-IN")}
                       color="#73E2A8"
@@ -240,6 +273,24 @@ export default function LeaderboardTab() {
                           <Text style={styles.expandedLabel}>Picks</Text>
                           <Text style={styles.expandedValue}>{entry.totalPredictions}</Text>
                         </View>
+                        <View style={styles.expandedItem}>
+                          <View style={styles.expandedIconLabel}>
+                            <Text style={styles.metricEmoji}>🎡</Text>
+                            <Text style={styles.expandedLabel}>Pts</Text>
+                          </View>
+                          <Text style={styles.expandedValue}>
+                            {(entry.wheelPointsEarned ?? 0).toLocaleString("en-IN")}
+                          </Text>
+                        </View>
+                        <View style={styles.expandedItem}>
+                          <View style={styles.expandedIconLabel}>
+                            <Text style={styles.metricEmoji}>🎡</Text>
+                            <Text style={styles.expandedLabel}>Coin</Text>
+                          </View>
+                          <Text style={styles.expandedValue}>
+                            {(entry.wheelCoinsEarned ?? 0).toLocaleString("en-IN")}
+                          </Text>
+                        </View>
                       </View>
                     ) : null}
                   </View>
@@ -248,11 +299,19 @@ export default function LeaderboardTab() {
             </View>
             ) : (
             <View style={styles.tableCard}>
-              <Text style={styles.listTitle}>Leaderboard</Text>
+              <Text style={styles.listTitle}>
+                {activeTab === "unlisted_users" ? "Unranked Users" : "Leaderboard"}
+              </Text>
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>No leaderboard data yet</Text>
+                <Text style={styles.emptyTitle}>
+                  {activeTab === "unlisted_users"
+                    ? "No unranked users right now"
+                    : "No leaderboard data yet"}
+                </Text>
                 <Text style={styles.emptyText}>
-                  Once users place and settle predictions, rankings will appear here.
+                  {activeTab === "unlisted_users"
+                    ? "Users below the 35% participation threshold will appear here."
+                    : "Once users place and settle predictions, rankings will appear here."}
                 </Text>
               </View>
             </View>
@@ -368,7 +427,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     alignSelf: "flex-start",
-    gap: 22,
+    gap: 12,
   },
   tabsDivider: {
     borderBottomWidth: 2,
@@ -382,7 +441,7 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: "#9FB0CF",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
   },
   tabButtonTextActive: {
@@ -500,6 +559,11 @@ const styles = StyleSheet.create({
     gap: 4,
     alignItems: "center",
   },
+  expandedIconLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   expandedLabel: {
     color: "#8EA0C1",
     fontSize: 11,
@@ -555,9 +619,34 @@ const styles = StyleSheet.create({
     width: 42,
     textAlign: "center",
   },
+  wheelPointsCol: {
+    width: 64,
+  },
+  wheelCoinsCol: {
+    width: 84,
+  },
   balanceCol: {
     width: 86,
     textAlign: "right",
+  },
+  metricHeaderCol: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  metricEmoji: {
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  metricCell: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  metricValue: {
+    textAlign: "center",
   },
   spinRewardCol: {
     flex: 1,

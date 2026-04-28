@@ -3,6 +3,9 @@ export type WeeklySpinRewardKind =
   | "points"
   | "free_bet_ticket"
   | "bet_insurance"
+  | "points_x2_next_win"
+  | "coins_x2_next_match_win"
+  | "spin_again"
   | "miss";
 
 export type WeeklySpinSegmentConfig = {
@@ -32,8 +35,26 @@ export type WeeklySpinAudience = "disabled" | "all_active_users" | "eligible_use
 
 export type WeeklySpinConfig = {
   audience: WeeklySpinAudience;
+  activeCampaignId?: string | null;
+  activeCampaignNumber?: number | null;
+  activeCampaignStartAt?: string | null;
+  activeCampaignEndAt?: string | null;
   updatedAt?: unknown;
   updatedBy?: string | null;
+};
+
+export type WeeklySpinCampaignStatus = "scheduled" | "live" | "ended" | "cancelled";
+
+export type WeeklySpinCampaignRecord = {
+  id: string;
+  campaignNumber: number;
+  startAt: string;
+  endAt: string;
+  status: WeeklySpinCampaignStatus;
+  createdBy: string;
+  updatedBy?: string | null;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 };
 
 export type UserRewardType = "free_bet_ticket" | "bet_insurance";
@@ -49,7 +70,7 @@ export type UserRewardRecord = {
   sourceType: "weekly_spin";
   sourceCycleId: string;
   sourceSpinResultId: string;
-  capAmount: number;
+  capAmount: number | null;
   usedPredictionId?: string | null;
   usedMatchId?: string | null;
   createdAt?: unknown;
@@ -59,6 +80,8 @@ export type UserRewardRecord = {
 
 export type WeeklySpinStatus = {
   cycleId: string;
+  campaignId: string | null;
+  campaignNumber: number | null;
   audience: WeeklySpinAudience;
   eligible: boolean;
   hasUsedSpin: boolean;

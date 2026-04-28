@@ -382,16 +382,9 @@ export default function MatchDetailScreen() {
       return rejectValidation(`Bets must be in multiples of ${BET_STEP} coins.`);
     }
 
-    if (selectedReward?.type === "free_bet_ticket" && parsedAmount > selectedReward.capAmount) {
-      return rejectValidation(
-        `Free Bet Ticket can only be used for bets up to ${selectedReward.capAmount.toLocaleString("en-IN")} coins.`
-      );
-    }
-
     const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
 
     if (
-      selectedReward?.type !== "free_bet_ticket" &&
       maximumAllowedBet !== null &&
       parsedAmount > maximumAllowedBet
     ) {
@@ -625,7 +618,7 @@ export default function MatchDetailScreen() {
                 {inputsEditable ? (
                   <Text style={styles.helperText}>
                     {selectedReward?.type === "free_bet_ticket"
-                      ? `Free Bet Ticket active. This bet will not deduct coins and is capped at ${selectedReward.capAmount.toLocaleString("en-IN")} coins.`
+                      ? "Free Bet Ticket active. This bet will not deduct coins."
                       : maximumAllowedBet !== null
                       ? `Max allowed for you: ${maximumAllowedBet.toLocaleString("en-IN")} coins. Bets above 20,000 balance are capped at 50%, and above 10,000 at 70%.`
                       : `Min bet is ${MINIMUM_BET} coins in multiples of ${BET_STEP}.`}

@@ -83,6 +83,37 @@ function looksLikePhoneLabel(value?: string | null) {
   return /^[0-9]{10,}$/.test(value.trim());
 }
 
+function getTimestampValue(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return 0;
+}
+
 export async function signUpWithPhone({
   displayName,
   phoneNumber,
@@ -158,33 +189,286 @@ export function subscribeToUserProfile(
 }
 
 export function subscribeToLeaderboardUsers(
-  callback: (users: UserProfileRecord[]) => void,
+  callback: (payload: {
+    listedUsers: UserProfileRecord[];
+    unlistedUsers: UserProfileRecord[];
+    totalCompletedMatches: number;
+  }) => void,
   onError?: (error: Error) => void
 ) {
   const { db } = getFirebaseServices();
-  return onSnapshot(
-    collection(db, "users"),
-    (snapshot) => {
-      const users = snapshot.docs
-        .map((userDoc) => ({
-          uid: userDoc.id,
-          ...(userDoc.data() as UserProfile),
-        }))
-        .filter((user) => user.totalPredictions > 0)
-        .sort((left, right) => {
-          if (right.points !== left.points) {
-            return right.points - left.points;
+  const LEADERBOARD_PARTICIPATION_THRESHOLD = 0.35;
+  let latestUsers: UserProfileRecord[] = [];
+  let latestSpinResults: Array<{
+    userId?: string;
+    rewardKind?: string;
+    rewardValue?: number | null;
+    createdAt?: unknown;
+  }> = [];
+  let latestPredictions: Array<{
+    userId?: string;
+    status?: string;
+    matchId?: string;
+    amount?: number;
+    payout?: number;
+    settledAt?: unknown;
+  }> = [];
+  let latestMatches: Array<{
+    id: string;
+    status?: string;
+  }> = [];
+
+  function emitLeaderboard() {
+    const completedMatchIdSet = new Set(
+      latestMatches
+        .filter((entry) =>
+          entry.status === "completed" ||
+          entry.status === "settled" ||
+          entry.status === "no_result"
+        )
+        .map((entry) => entry.id)
+    );
+    const totalCompletedMatches = completedMatchIdSet.size;
+    const metricsByUser = new Map<string, { wheelPointsEarned: number; wheelCoinsEarned: number }>();
+    const participationByUser = new Map<
+      string,
+      { playedCompletedMatches: number; participationRate: number }
+    >();
+
+    for (const user of latestUsers) {
+      const events: Array<
+        | {
+            type: "spin";
+            at: number;
+            rewardKind: string;
+            rewardValue: number | null;
+          }
+        | {
+            type: "prediction";
+            at: number;
+            status: string;
+            amount: number;
+            payout: number;
+          }
+      > = [];
+
+      for (const entry of latestSpinResults) {
+        if (entry.userId !== user.uid) {
+          continue;
+        }
+
+        events.push({
+          type: "spin",
+          at: getTimestampValue(entry.createdAt),
+          rewardKind: entry.rewardKind ?? "",
+          rewardValue: entry.rewardValue ?? null,
+        });
+      }
+
+      for (const entry of latestPredictions) {
+        if (entry.userId !== user.uid) {
+          continue;
+        }
+
+        const amount = typeof entry.amount === "number" ? entry.amount : 0;
+        const payout = typeof entry.payout === "number" ? entry.payout : 0;
+        events.push({
+          type: "prediction",
+          at: getTimestampValue(entry.settledAt),
+          status: entry.status ?? "",
+          amount,
+          payout,
+        });
+      }
+
+      const playedCompletedMatchIds = new Set(
+        latestPredictions
+          .filter((entry) => entry.userId === user.uid)
+          .map((entry) => entry.matchId)
+          .filter((matchId): matchId is string => !!matchId && completedMatchIdSet.has(matchId))
+      );
+      const playedCompletedMatches = playedCompletedMatchIds.size;
+      const participationRate =
+        totalCompletedMatches > 0 ? playedCompletedMatches / totalCompletedMatches : 1;
+      participationByUser.set(user.uid, { playedCompletedMatches, participationRate });
+
+      events.sort((left, right) => {
+        if (left.at !== right.at) {
+          return left.at - right.at;
+        }
+
+        if (left.type === right.type) {
+          return 0;
+        }
+
+        return left.type === "spin" ? -1 : 1;
+      });
+
+      let hasPendingDoublePointsNextWin = false;
+      let hasPendingDoubleCoinNextMatchWin = false;
+      let wheelPointsEarned = 0;
+      let wheelCoinsEarned = 0;
+
+      for (const event of events) {
+        if (event.type === "spin") {
+          if (event.rewardKind === "points" && event.rewardValue) {
+            wheelPointsEarned += event.rewardValue;
+            continue;
           }
 
-          return right.balance - left.balance;
-        });
+          if (event.rewardKind === "coins" && event.rewardValue) {
+            wheelCoinsEarned += event.rewardValue;
+            continue;
+          }
 
-      callback(users);
+          if (event.rewardKind === "points_x2_next_win") {
+            hasPendingDoublePointsNextWin = true;
+            continue;
+          }
+
+          if (event.rewardKind === "coins_x2_next_match_win") {
+            hasPendingDoubleCoinNextMatchWin = true;
+          }
+
+          continue;
+        }
+
+        if (event.status === "won") {
+          if (hasPendingDoublePointsNextWin) {
+            wheelPointsEarned += 3;
+            hasPendingDoublePointsNextWin = false;
+          }
+
+          if (hasPendingDoubleCoinNextMatchWin) {
+            const normalPayout = event.amount * 2;
+            const bonusCoins = Math.max(0, event.payout - normalPayout);
+            wheelCoinsEarned += bonusCoins;
+            hasPendingDoubleCoinNextMatchWin = false;
+          }
+
+          continue;
+        }
+
+        if (event.status === "lost") {
+          hasPendingDoublePointsNextWin = false;
+          hasPendingDoubleCoinNextMatchWin = false;
+        }
+      }
+
+      metricsByUser.set(user.uid, {
+        wheelPointsEarned,
+        wheelCoinsEarned,
+      });
+    }
+
+    const users = latestUsers
+      .map((user) => {
+        const computed = metricsByUser.get(user.uid);
+        return {
+          ...user,
+          wheelPointsEarned: computed?.wheelPointsEarned ?? user.wheelPointsEarned ?? 0,
+          wheelCoinsEarned: computed?.wheelCoinsEarned ?? user.wheelCoinsEarned ?? 0,
+        };
+      })
+      .filter((user) => user.totalPredictions > 0);
+
+    const sortByRank = (left: UserProfileRecord, right: UserProfileRecord) => {
+      if (right.points !== left.points) {
+        return right.points - left.points;
+      }
+
+      return right.balance - left.balance;
+    };
+
+    const listedUsers = users
+      .filter((user) => {
+        const participationRate = participationByUser.get(user.uid)?.participationRate ?? 1;
+        return participationRate >= LEADERBOARD_PARTICIPATION_THRESHOLD;
+      })
+      .sort(sortByRank);
+
+    const unlistedUsers = users
+      .filter((user) => {
+        const participationRate = participationByUser.get(user.uid)?.participationRate ?? 1;
+        return participationRate < LEADERBOARD_PARTICIPATION_THRESHOLD;
+      })
+      .sort(sortByRank);
+
+    callback({
+      listedUsers,
+      unlistedUsers,
+      totalCompletedMatches,
+    });
+  }
+
+  const unsubscribeUsers = onSnapshot(
+    collection(db, "users"),
+    (snapshot) => {
+      latestUsers = snapshot.docs.map((userDoc) => ({
+        uid: userDoc.id,
+        ...(userDoc.data() as UserProfile),
+      }));
+      emitLeaderboard();
     },
     (error) => {
       onError?.(error);
     }
   );
+
+  const unsubscribeSpinResults = onSnapshot(
+    collection(db, "weekly_spin_results"),
+    (snapshot) => {
+      latestSpinResults = snapshot.docs.map((entry) => entry.data() as {
+        userId?: string;
+        rewardKind?: string;
+        rewardValue?: number | null;
+        createdAt?: unknown;
+      });
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  const unsubscribePredictions = onSnapshot(
+    collection(db, "predictions"),
+    (snapshot) => {
+      latestPredictions = snapshot.docs.map((entry) => entry.data() as {
+        userId?: string;
+        status?: string;
+        matchId?: string;
+        amount?: number;
+        payout?: number;
+        settledAt?: unknown;
+      });
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  const unsubscribeMatches = onSnapshot(
+    collection(db, "matches"),
+    (snapshot) => {
+      latestMatches = snapshot.docs.map((entry) => ({
+        id: entry.id,
+        status: (entry.data() as { status?: string }).status,
+      }));
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  return () => {
+    unsubscribeUsers();
+    unsubscribeSpinResults();
+    unsubscribePredictions();
+    unsubscribeMatches();
+  };
 }
 
 export function subscribeToAllUsers(
@@ -529,6 +813,11 @@ async function createUserProfile(
       wins: 0,
       losses: 0,
       totalPredictions: 0,
+      hasReceivedSpinAgain: false,
+      hasPendingDoublePointsNextWin: false,
+      hasPendingDoubleCoinNextMatchWin: false,
+      wheelPointsEarned: 0,
+      wheelCoinsEarned: 0,
       createdAt: now,
       updatedAt: now,
     });
@@ -619,6 +908,11 @@ async function createUserProfileFromMissingSnapshot(
     wins: 0,
     losses: 0,
     totalPredictions: 0,
+    hasReceivedSpinAgain: false,
+    hasPendingDoublePointsNextWin: false,
+    hasPendingDoubleCoinNextMatchWin: false,
+    wheelPointsEarned: 0,
+    wheelCoinsEarned: 0,
     createdAt: now,
     updatedAt: now,
   });
