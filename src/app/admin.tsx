@@ -31,7 +31,7 @@ import {
   type SettlementBackupAvailability,
   updateMatchSettings,
 } from "@/lib/matches";
-import { deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
+import { applyGlobalBonus, deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
 import { getIplTeamById, IPL_TEAMS, type IplTeam, type IplTeamId } from "@/lib/ipl-teams";
 import type { MatchRecord } from "@/lib/match-types";
 import type { UserProfileRecord } from "@/lib/auth-types";
@@ -67,7 +67,7 @@ type CampaignPickerTarget =
   | "end_time"
   | null;
 type AdminMatchView = "live" | "results";
-type AdminSection = "users" | "create_match" | "manage_match" | "weekly_spin";
+type AdminSection = "users" | "create_match" | "manage_match" | "weekly_spin" | "bonus";
 
 export default function AdminScreen() {
   const router = useRouter();
@@ -111,6 +111,10 @@ export default function AdminScreen() {
   const [campaignPickerTarget, setCampaignPickerTarget] = useState<CampaignPickerTarget>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<WeeklySpinCampaignRecord | null>(null);
   const [isCampaignActionLoading, setIsCampaignActionLoading] = useState(false);
+  const [bonusPointsInput, setBonusPointsInput] = useState("");
+  const [bonusCoinsInput, setBonusCoinsInput] = useState("");
+  const [bonusReasonInput, setBonusReasonInput] = useState("");
+  const [isApplyingBonus, setIsApplyingBonus] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -583,6 +587,53 @@ export default function AdminScreen() {
     }
   }
 
+  async function handleApplyGlobalBonus() {
+    if (isApplyingBonus) {
+      return;
+    }
+
+    const points = Number(bonusPointsInput.trim() || "0");
+    const coins = Number(bonusCoinsInput.trim() || "0");
+    const reason = bonusReasonInput.trim();
+
+    if (!reason) {
+      Alert.alert("Missing reason", "Bonus reason is required.");
+      return;
+    }
+
+    if ((!Number.isFinite(points) || points < 0) || (!Number.isFinite(coins) || coins < 0)) {
+      Alert.alert("Invalid value", "Bonus points and coins must be valid positive numbers.");
+      return;
+    }
+
+    if (Math.floor(points) <= 0 && Math.floor(coins) <= 0) {
+      Alert.alert("Missing bonus value", "Enter bonus points or bonus coins.");
+      return;
+    }
+
+    try {
+      setIsApplyingBonus(true);
+      const result = await applyGlobalBonus({
+        adminUserId,
+        bonusPoints: Math.floor(points),
+        bonusCoins: Math.floor(coins),
+        reason,
+      });
+      setBonusPointsInput("");
+      setBonusCoinsInput("");
+      setBonusReasonInput("");
+      Alert.alert(
+        "Bonus sent",
+        `Granted bonus to ${result.recipientCount} users.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to apply global bonus.";
+      Alert.alert("Bonus failed", message);
+    } finally {
+      setIsApplyingBonus(false);
+    }
+  }
+
   const NativeDateTimePicker =
     Platform.OS === "web"
       ? null
@@ -816,21 +867,31 @@ export default function AdminScreen() {
                 label="Users"
                 active={activeSection === "users"}
                 onPress={() => setActiveSection("users")}
+                compact
               />
               <AdminTabButton
                 label="+ Match"
                 active={activeSection === "create_match"}
                 onPress={() => setActiveSection("create_match")}
+                compact
               />
               <AdminTabButton
                 label="Manage Match"
                 active={activeSection === "manage_match"}
                 onPress={() => setActiveSection("manage_match")}
+                compact
               />
               <AdminTabButton
                 label="Weekly Spin"
                 active={activeSection === "weekly_spin"}
                 onPress={() => setActiveSection("weekly_spin")}
+                compact
+              />
+              <AdminTabButton
+                label="Bonus"
+                active={activeSection === "bonus"}
+                onPress={() => setActiveSection("bonus")}
+                compact
               />
             </View>
 
@@ -1255,6 +1316,51 @@ export default function AdminScreen() {
                     )}
                   </View>
                 </View>
+              </View>
+            ) : activeSection === "bonus" ? (
+              <View style={[styles.card, isDesktop && styles.cardDesktop]}>
+                <Text style={styles.cardTitle}>Global Bonus</Text>
+                <Text style={styles.sectionDescription}>
+                  Grant one-time bonus points and/or coins to all users.
+                </Text>
+                <Text style={styles.selectorLabel}>Bonus Points</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 5"
+                  placeholderTextColor="#4C5D7C"
+                  keyboardType="number-pad"
+                  value={bonusPointsInput}
+                  onChangeText={(value) => setBonusPointsInput(value.replace(/[^0-9]/g, ""))}
+                />
+                <Text style={styles.selectorLabel}>Bonus Coins</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 1000"
+                  placeholderTextColor="#4C5D7C"
+                  keyboardType="number-pad"
+                  value={bonusCoinsInput}
+                  onChangeText={(value) => setBonusCoinsInput(value.replace(/[^0-9]/g, ""))}
+                />
+                <Text style={styles.selectorLabel}>Bonus Reason</Text>
+                <TextInput
+                  style={[styles.input, styles.textAreaInput]}
+                  placeholder="Why this bonus was granted"
+                  placeholderTextColor="#4C5D7C"
+                  value={bonusReasonInput}
+                  onChangeText={setBonusReasonInput}
+                  multiline
+                />
+                <Pressable
+                  style={[styles.primaryButton, isApplyingBonus && styles.buttonDisabled]}
+                  onPress={() => void handleApplyGlobalBonus()}
+                  disabled={isApplyingBonus}
+                >
+                  {isApplyingBonus ? (
+                    <ActivityIndicator size="small" color="#F7FAFF" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Send Bonus To All Users</Text>
+                  )}
+                </Pressable>
               </View>
             ) : (
               <View style={[styles.card, isDesktop && styles.cardDesktop]}>
@@ -1683,6 +1789,12 @@ const styles = StyleSheet.create({
     height: 56,
     color: "#F7FAFF",
     fontSize: 16,
+  },
+  textAreaInput: {
+    minHeight: 92,
+    height: 92,
+    textAlignVertical: "top",
+    paddingTop: 14,
   },
   selectorSection: {
     gap: 10,

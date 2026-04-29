@@ -16,8 +16,17 @@ import { CoinAmount } from "@/components/CoinAmount";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { subscribeToLeaderboardUsers } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
-import { getTimestampValue, subscribeToRecentSpinResults } from "@/lib/spin";
-import type { WeeklySpinResultRecord } from "@/lib/spin-types";
+import {
+  getTimestampValue,
+  subscribeToRecentSpinResults,
+  subscribeToWeeklySpinCampaigns,
+  subscribeToWeeklySpinConfig,
+} from "@/lib/spin";
+import type {
+  WeeklySpinCampaignRecord,
+  WeeklySpinConfig,
+  WeeklySpinResultRecord,
+} from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type LeaderboardViewTab = "leaderboard" | "unlisted_users" | "spin_winners";
@@ -34,7 +43,10 @@ export default function LeaderboardTab() {
   const [spinError, setSpinError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [expandedCampaignKey, setExpandedCampaignKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LeaderboardViewTab>("leaderboard");
+  const [spinCampaigns, setSpinCampaigns] = useState<WeeklySpinCampaignRecord[]>([]);
+  const [spinConfig, setSpinConfig] = useState<WeeklySpinConfig | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToLeaderboardUsers(
@@ -53,6 +65,30 @@ export default function LeaderboardTab() {
     );
 
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeConfig = subscribeToWeeklySpinConfig(
+      (nextConfig) => {
+        setSpinConfig(nextConfig);
+      },
+      () => {
+        setSpinConfig(null);
+      }
+    );
+    const unsubscribeCampaigns = subscribeToWeeklySpinCampaigns(
+      (nextCampaigns) => {
+        setSpinCampaigns(nextCampaigns);
+      },
+      () => {
+        setSpinCampaigns([]);
+      }
+    );
+
+    return () => {
+      unsubscribeConfig();
+      unsubscribeCampaigns();
+    };
   }, []);
 
   useEffect(() => {
@@ -103,12 +139,99 @@ export default function LeaderboardTab() {
         .map((entry, index) => ({
           id: entry.id,
           rank: index + 1,
+          cycleId: entry.cycleId,
           name: userNameById.get(entry.userId) ?? "Player",
           reward: entry.rewardLabel,
           createdAt: entry.createdAt,
         })),
     [spinResults, userNameById]
   );
+  const campaignLabelByCycleId = useMemo(() => {
+    return new Map<string, string>(
+      spinCampaigns.map((campaign) => [
+        `campaign_${campaign.campaignNumber}`,
+        `Campaign #${campaign.campaignNumber}`,
+      ] as const)
+    );
+  }, [spinCampaigns]);
+  const activePublishedCampaign = useMemo(() => {
+    if (!spinConfig?.activeCampaignId) {
+      return null;
+    }
+    return (
+      spinCampaigns.find(
+        (campaign) =>
+          campaign.id === spinConfig.activeCampaignId && campaign.status === "live"
+      ) ?? null
+    );
+  }, [spinCampaigns, spinConfig]);
+  const activeCampaignCycleId = activePublishedCampaign
+    ? `campaign_${activePublishedCampaign.campaignNumber}`
+    : null;
+  const spinSections = useMemo(() => {
+    const byCycle = new Map<
+      string,
+      {
+        cycleId: string;
+        campaignNumber: number | null;
+        latestEntryMs: number;
+        rows: typeof winnersRows;
+      }
+    >();
+
+    for (const row of winnersRows) {
+      const cycleId = row.cycleId;
+      const campaignMatch = /^campaign_(\d+)$/.exec(cycleId);
+      const campaignNumber = campaignMatch ? Number(campaignMatch[1]) : null;
+      const rowMs = getTimestampValue(row.createdAt);
+      const current = byCycle.get(cycleId);
+
+      if (!current) {
+        byCycle.set(cycleId, {
+          cycleId,
+          campaignNumber,
+          latestEntryMs: rowMs,
+          rows: [row],
+        });
+        continue;
+      }
+
+      current.rows.push(row);
+      current.latestEntryMs = Math.max(current.latestEntryMs, rowMs);
+    }
+
+    return [...byCycle.values()]
+      .map((section) => ({
+        ...section,
+        rows: [...section.rows].sort(
+          (left, right) => getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt)
+        ),
+      }))
+      .sort((left, right) => {
+        if (left.campaignNumber != null && right.campaignNumber != null) {
+          return right.campaignNumber - left.campaignNumber;
+        }
+        if (left.campaignNumber != null) {
+          return -1;
+        }
+        if (right.campaignNumber != null) {
+          return 1;
+        }
+        return right.latestEntryMs - left.latestEntryMs;
+      });
+  }, [winnersRows]);
+
+  useEffect(() => {
+    if (!spinSections.length) {
+      setExpandedCampaignKey(null);
+      return;
+    }
+    if (activeCampaignCycleId) {
+      setExpandedCampaignKey(activeCampaignCycleId);
+      return;
+    }
+    setExpandedCampaignKey((current) => current ?? spinSections[0].cycleId);
+  }, [activeCampaignCycleId, spinSections]);
 
   if (isLoading) {
     return (
@@ -323,30 +446,62 @@ export default function LeaderboardTab() {
                 <Text style={styles.loadingInlineText}>Loading spin winners...</Text>
               </View>
             </View>
-          ) : winnersRows.length ? (
-            <View style={styles.tableCard}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
-                <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
-                <Text style={[styles.tableHeaderText, styles.spinRewardCol]}>Reward</Text>
-                <Text style={[styles.tableHeaderText, styles.spinTimeCol]}>When</Text>
-              </View>
-              {winnersRows.map((entry) => (
-                <View key={entry.id} style={styles.tableRow}>
-                  <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>#{entry.rank}</Text>
-                  <View style={[styles.nameCol, styles.nameCell]}>
-                    <Text style={styles.nameText} numberOfLines={1}>
-                      {entry.name}
-                    </Text>
+          ) : spinSections.length ? (
+            <View>
+              {spinSections.map((section) => {
+                const isExpanded = expandedCampaignKey === section.cycleId;
+                const campaignLabel =
+                  campaignLabelByCycleId.get(section.cycleId) ??
+                  (section.campaignNumber != null
+                    ? `Campaign #${section.campaignNumber}`
+                    : section.cycleId);
+
+                return (
+                  <View key={section.cycleId} style={styles.campaignSection}>
+                    <Pressable
+                      style={styles.campaignSectionHeader}
+                      onPress={() =>
+                        setExpandedCampaignKey((current) =>
+                          current === section.cycleId ? null : section.cycleId
+                        )
+                      }
+                    >
+                      <Text style={styles.campaignSectionTitle}>{campaignLabel}</Text>
+                      <Text style={styles.campaignSectionToggle}>
+                        {isExpanded ? "Hide" : "Show"}
+                      </Text>
+                    </Pressable>
+                    {isExpanded ? (
+                      <>
+                        <View style={styles.tableHeader}>
+                          <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
+                          <Text style={[styles.tableHeaderText, styles.nameCol]}>Name</Text>
+                          <Text style={[styles.tableHeaderText, styles.spinRewardCol]}>Reward</Text>
+                          <Text style={[styles.tableHeaderText, styles.spinTimeCol]}>When</Text>
+                        </View>
+                        {section.rows.map((entry, index) => (
+                          <View key={entry.id} style={styles.tableRow}>
+                            <Text style={[styles.tableCell, styles.rankCol, styles.rankCell]}>
+                              #{index + 1}
+                            </Text>
+                            <View style={[styles.nameCol, styles.nameCell]}>
+                              <Text style={styles.nameText} numberOfLines={1}>
+                                {entry.name}
+                              </Text>
+                            </View>
+                            <Text style={[styles.tableCell, styles.spinRewardCol]} numberOfLines={1}>
+                              {entry.reward}
+                            </Text>
+                            <Text style={[styles.tableCell, styles.spinTimeCol]}>
+                              {formatSpinWinnerTime(entry.createdAt)}
+                            </Text>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
                   </View>
-                  <Text style={[styles.tableCell, styles.spinRewardCol]} numberOfLines={1}>
-                    {entry.reward}
-                  </Text>
-                  <Text style={[styles.tableCell, styles.spinTimeCol]}>
-                    {formatSpinWinnerTime(entry.createdAt)}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           ) : (
             <View style={styles.tableCard}>
@@ -658,6 +813,34 @@ const styles = StyleSheet.create({
     color: "#9FB0CF",
     fontSize: 12,
     fontWeight: "600",
+  },
+  campaignSection: {
+    borderWidth: 1,
+    borderColor: "#27477D",
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 12,
+    backgroundColor: "#0D1F43",
+  },
+  campaignSectionHeader: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E3564",
+  },
+  campaignSectionTitle: {
+    color: "#E9F1FF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  campaignSectionToggle: {
+    color: "#8FB2FF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   balanceCell: {
     color: "#73E2A8",
