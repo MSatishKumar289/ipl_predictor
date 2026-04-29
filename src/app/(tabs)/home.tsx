@@ -21,7 +21,7 @@ import type { MatchRecord } from "@/lib/match-types";
 import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
 import {
-  getNextScheduledWeeklySpinCampaign,
+  getWeeklySpinConfig,
   getWeeklySpinStatus,
   hasUserPlayedAnyWeeklySpin,
 } from "@/lib/spin";
@@ -125,11 +125,15 @@ export default function HomeTab() {
         setHasUsedSpin(hasPlayedAnySpin);
 
         if (hasPlayedAnySpin) {
-          const nextCampaign = await getNextScheduledWeeklySpinCampaign();
+          const config = await getWeeklySpinConfig();
           if (!isActive) {
             return;
           }
-          setNextSpinStartAt(nextCampaign?.startAt ?? null);
+          const publishedStartAt = config.activeCampaignStartAt ?? null;
+          const publishedStartAtMs = publishedStartAt ? Date.parse(publishedStartAt) : 0;
+          setNextSpinStartAt(
+            publishedStartAt && publishedStartAtMs > Date.now() ? publishedStartAt : null
+          );
           return;
         }
 
@@ -228,7 +232,10 @@ export default function HomeTab() {
             </Pressable>
           ) : null}
 
-          {!isSpinLoading && hasUsedSpin && nextSpinCountdownSeconds > 0 ? (
+          {!isSpinLoading &&
+          !isSpinEligible &&
+          hasUsedSpin &&
+          nextSpinCountdownSeconds > 0 ? (
             <View style={styles.nextSpinCard}>
               <Text style={styles.nextSpinLabel}>Next Spin</Text>
               <Text style={styles.nextSpinCountdown}>{formatCountdown(nextSpinCountdownSeconds)}</Text>
