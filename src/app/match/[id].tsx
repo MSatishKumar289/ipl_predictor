@@ -19,7 +19,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BackIcon } from "@/components/BackIcon";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
+import { FallbackIssueModal } from "@/components/FallbackIssueModal";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
+import { resolveFallbackIssue, type FallbackIssue } from "@/lib/error-fallback";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   formatMatchDate,
@@ -161,6 +163,7 @@ export default function MatchDetailScreen() {
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isEditingPrediction, setIsEditingPrediction] = useState(false);
+  const [fallbackIssue, setFallbackIssue] = useState<FallbackIssue | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -451,6 +454,12 @@ export default function MatchDetailScreen() {
       router.replace("/(tabs)/my-bets");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save prediction.";
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setIsConfirmVisible(false);
+        setFallbackIssue(fallback);
+        return;
+      }
       const config = getPredictionErrorConfig(message);
 
       if (config.useToast) {
@@ -483,6 +492,12 @@ export default function MatchDetailScreen() {
       setIsDeleteConfirmVisible(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to delete your bet.";
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setIsDeleteConfirmVisible(false);
+        setFallbackIssue(fallback);
+        return;
+      }
       const config = getPredictionErrorConfig(message);
 
       if (config.useToast) {
@@ -965,6 +980,7 @@ export default function MatchDetailScreen() {
           </View>
         </View>
       ) : null}
+      <FallbackIssueModal issue={fallbackIssue} onClose={() => setFallbackIssue(null)} />
     </SafeAreaView>
   );
 }
