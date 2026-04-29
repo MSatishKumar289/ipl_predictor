@@ -11,7 +11,12 @@ export type PredictionRecord = {
   amount: number;
   walletDebitAmount: number;
   appliedRewardId?: string | null;
-  appliedRewardType?: "free_bet_ticket" | "bet_insurance" | null;
+  appliedRewardType?:
+    | "free_bet_ticket"
+    | "bet_insurance"
+    | "points_x2_next_win"
+    | "coins_x2_next_match_win"
+    | null;
   appliedRewardLabel?: string | null;
   appliedRewardCapAmount?: number | null;
   status: PredictionStatus;

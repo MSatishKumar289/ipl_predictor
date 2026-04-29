@@ -28,6 +28,8 @@ import type {
 
 const INDIA_OFFSET_MINUTES = 330;
 const WEEKLY_SPIN_PARTICIPATION_THRESHOLD = 0.35;
+const REWARD_EXPIRY_DAYS = 4;
+const REWARD_EXPIRY_MS = REWARD_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 const WEEKLY_SPIN_CONFIG_DOC = doc(db, "app_settings", "weekly_spin");
 const WEEKLY_SPIN_CAMPAIGNS_COLLECTION = collection(db, "weekly_spin_campaigns");
 
@@ -153,6 +155,12 @@ export function getWeeklySpinCycleId(now = new Date()) {
 export function formatSpinRewardLabel(type: UserRewardType, capAmount: number | null) {
   if (type === "free_bet_ticket") {
     return "Free Bet Ticket";
+  }
+  if (type === "points_x2_next_win") {
+    return "2x Points on next win";
+  }
+  if (type === "coins_x2_next_match_win") {
+    return "2x Coins on next match win";
   }
 
   const resolvedCapAmount = capAmount ?? SPECIAL_REWARD_CAP_AMOUNT;
@@ -668,7 +676,10 @@ export async function spinWeeklyWheel(userId: string) {
     resolvedSegment = segment;
     resolvedSegmentIndex = segmentIndex;
     const rewardRef =
-      segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance"
+      segment.kind === "free_bet_ticket" ||
+      segment.kind === "bet_insurance" ||
+      segment.kind === "points_x2_next_win" ||
+      segment.kind === "coins_x2_next_match_win"
         ? doc(collection(db, "user_rewards"))
         : null;
 
@@ -725,8 +736,15 @@ export async function spinWeeklyWheel(userId: string) {
 
     if (
       rewardRef &&
-      (segment.kind === "free_bet_ticket" || segment.kind === "bet_insurance")
+      (segment.kind === "free_bet_ticket" ||
+        segment.kind === "bet_insurance" ||
+        segment.kind === "points_x2_next_win" ||
+        segment.kind === "coins_x2_next_match_win")
     ) {
+      const expiresAt =
+        segment.kind === "points_x2_next_win" || segment.kind === "coins_x2_next_match_win"
+          ? new Date(Date.now() + REWARD_EXPIRY_MS).toISOString()
+          : null;
       transaction.set(rewardRef, {
         userId,
         type: segment.kind,
@@ -739,25 +757,11 @@ export async function spinWeeklyWheel(userId: string) {
         usedPredictionId: null,
         usedMatchId: null,
         usedAt: null,
+        expiresAt,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       } satisfies Omit<UserRewardRecord, "id">);
       return;
-    }
-
-    if (segment.kind === "points_x2_next_win") {
-      transaction.update(userRef, {
-        hasPendingDoublePointsNextWin: true,
-        updatedAt: serverTimestamp(),
-      });
-      return;
-    }
-
-    if (segment.kind === "coins_x2_next_match_win") {
-      transaction.update(userRef, {
-        hasPendingDoubleCoinNextMatchWin: true,
-        updatedAt: serverTimestamp(),
-      });
     }
   });
 
@@ -796,13 +800,25 @@ export function subscribeToAvailableRewards(
       where("status", "==", "available")
     ),
     (snapshot) => {
+      const now = Date.now();
       callback(
-        snapshot.docs.map((entry) =>
-          normalizeUserReward({
-            id: entry.id,
-            data: entry.data() as Omit<UserRewardRecord, "id">,
+        snapshot.docs
+          .map((entry) =>
+            normalizeUserReward({
+              id: entry.id,
+              data: entry.data() as Omit<UserRewardRecord, "id">,
+            })
+          )
+          .filter((reward) => {
+            if (
+              reward.type !== "points_x2_next_win" &&
+              reward.type !== "coins_x2_next_match_win"
+            ) {
+              return true;
+            }
+            const expiresAtMs = getTimestampValue(reward.expiresAt);
+            return expiresAtMs <= 0 || expiresAtMs > now;
           })
-        )
       );
     },
     (error) => {
@@ -923,6 +939,12 @@ export function getTimestampValue(value: unknown) {
 export function formatRewardUsageLabel(reward: UserRewardRecord) {
   if (reward.type === "free_bet_ticket") {
     return "Free Bet Ticket";
+  }
+  if (reward.type === "points_x2_next_win") {
+    return "2x Points on next win";
+  }
+  if (reward.type === "coins_x2_next_match_win") {
+    return "2x Coins on next match win";
   }
 
   const resolvedCapAmount = reward.capAmount ?? SPECIAL_REWARD_CAP_AMOUNT;
