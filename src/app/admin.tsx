@@ -40,6 +40,7 @@ import {
   DEFAULT_WEEKLY_SPIN_AUDIENCE,
   deleteWeeklySpinCampaign,
   publishWeeklySpinCampaign,
+  unpublishWeeklySpinCampaign,
   subscribeToWeeklySpinCampaigns,
   subscribeToWeeklySpinConfig,
   updateWeeklySpinConfig,
@@ -99,6 +100,7 @@ export default function AdminScreen() {
   const [createMatchSuccess, setCreateMatchSuccess] = useState<string | null>(null);
   const [weeklySpinAudience, setWeeklySpinAudience] =
     useState<WeeklySpinAudience>(DEFAULT_WEEKLY_SPIN_AUDIENCE);
+  const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [isSavingWeeklySpin, setIsSavingWeeklySpin] = useState(false);
   const [weeklySpinCampaigns, setWeeklySpinCampaigns] = useState<WeeklySpinCampaignRecord[]>([]);
   const [campaignStartDate, setCampaignStartDate] = useState("");
@@ -151,9 +153,11 @@ export default function AdminScreen() {
     const unsubscribe = subscribeToWeeklySpinConfig(
       (config) => {
         setWeeklySpinAudience(config.audience);
+        setActiveCampaignId(config.activeCampaignId ?? null);
       },
       () => {
         setWeeklySpinAudience(DEFAULT_WEEKLY_SPIN_AUDIENCE);
+        setActiveCampaignId(null);
       }
     );
 
@@ -561,6 +565,24 @@ export default function AdminScreen() {
     }
   }
 
+  async function handleDisableCampaign() {
+    if (isCampaignActionLoading) {
+      return;
+    }
+
+    try {
+      setIsCampaignActionLoading(true);
+      await unpublishWeeklySpinCampaign(adminUserId);
+      setSelectedCampaign(null);
+      Alert.alert("Campaign disabled", "The active campaign has been disabled.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to disable campaign.";
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsCampaignActionLoading(false);
+    }
+  }
+
   const NativeDateTimePicker =
     Platform.OS === "web"
       ? null
@@ -712,17 +734,31 @@ export default function AdminScreen() {
           Start: {formatMatchDate(selectedCampaign.startAt)}{"\n"}
           End: {formatMatchDate(selectedCampaign.endAt)}
         </Text>
-        <Pressable
-          style={[styles.confirmPrimaryButton, isCampaignActionLoading && styles.buttonDisabled]}
-          onPress={() => void handlePublishCampaign(selectedCampaign)}
-          disabled={isCampaignActionLoading}
-        >
-          {isCampaignActionLoading ? (
-            <ActivityIndicator size="small" color="#F7FAFF" />
-          ) : (
-            <Text style={styles.confirmPrimaryButtonText}>Publish Campaign</Text>
-          )}
-        </Pressable>
+        {selectedCampaign.id === activeCampaignId ? (
+          <Pressable
+            style={[styles.confirmDangerButton, isCampaignActionLoading && styles.buttonDisabled]}
+            onPress={() => void handleDisableCampaign()}
+            disabled={isCampaignActionLoading}
+          >
+            {isCampaignActionLoading ? (
+              <ActivityIndicator size="small" color="#F7FAFF" />
+            ) : (
+              <Text style={styles.confirmPrimaryButtonText}>Disable Campaign</Text>
+            )}
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[styles.confirmPrimaryButton, isCampaignActionLoading && styles.buttonDisabled]}
+            onPress={() => void handlePublishCampaign(selectedCampaign)}
+            disabled={isCampaignActionLoading}
+          >
+            {isCampaignActionLoading ? (
+              <ActivityIndicator size="small" color="#F7FAFF" />
+            ) : (
+              <Text style={styles.confirmPrimaryButtonText}>Publish Campaign</Text>
+            )}
+          </Pressable>
+        )}
         <Pressable
           style={[styles.confirmDangerButton, isCampaignActionLoading && styles.buttonDisabled]}
           onPress={() => void handleDeleteCampaign(selectedCampaign)}
