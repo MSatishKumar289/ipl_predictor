@@ -4,6 +4,7 @@ import { Redirect, Stack, router, usePathname } from "expo-router";
 
 import { RouteFallbackScreen } from "@/components/RouteFallbackScreen";
 import { QuickRulesWidget } from "@/components/QuickRulesWidget";
+import { BonusNoticePopup } from "@/components/BonusNoticePopup";
 import { logout } from "@/lib/auth";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
@@ -90,6 +91,7 @@ function AuthGate() {
         userId={user?.uid}
       />
       <QuickRulesWidget enabled={shouldShowAdminFab} autoOpen={false} variant="admin" />
+      <BonusNoticePopup userId={user?.uid} />
     </>
   );
 }
