@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BackIcon } from "@/components/BackIcon";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
+import { FallbackIssueModal } from "@/components/FallbackIssueModal";
 import { CloseIcon } from "@/components/CloseIcon";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import {
@@ -45,6 +46,7 @@ import {
   subscribeToWeeklySpinConfig,
   updateWeeklySpinConfig,
 } from "@/lib/spin";
+import { resolveFallbackIssue, type FallbackIssue } from "@/lib/error-fallback";
 import type { WeeklySpinAudience, WeeklySpinCampaignRecord } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -115,6 +117,7 @@ export default function AdminScreen() {
   const [bonusCoinsInput, setBonusCoinsInput] = useState("");
   const [bonusReasonInput, setBonusReasonInput] = useState("");
   const [isApplyingBonus, setIsApplyingBonus] = useState(false);
+  const [fallbackIssue, setFallbackIssue] = useState<FallbackIssue | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -317,6 +320,10 @@ export default function AdminScreen() {
       setCreateMatchSuccess("Match created successfully. The fixture is now live.");
       Alert.alert("Match created", "The fixture is now live in the matches list.");
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message = error instanceof Error ? error.message : "Unable to create match.";
       setCreateMatchError(message);
       Alert.alert("Create failed", message);
@@ -343,6 +350,10 @@ export default function AdminScreen() {
     try {
       await updateMatchSettings(matchId, nextValue);
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to update editing settings.";
       Alert.alert("Update failed", message);
@@ -359,6 +370,10 @@ export default function AdminScreen() {
       await settleMatchOutcome(pendingSettlement.matchId, pendingSettlement.winner, adminUserId);
       setPendingSettlement(null);
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to settle the match result.";
       Alert.alert("Settlement failed", message);
@@ -378,6 +393,10 @@ export default function AdminScreen() {
       setPendingRevert(null);
       Alert.alert("Settlement reverted", "The match result and related records were restored.");
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to revert the match settlement.";
       Alert.alert("Revert failed", message);
@@ -397,6 +416,10 @@ export default function AdminScreen() {
       setSelectedUser(null);
       Alert.alert("Records deleted", "The user's Firestore records have been removed.");
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to delete the user's records.";
       Alert.alert("Delete failed", message);
@@ -415,6 +438,10 @@ export default function AdminScreen() {
       await updateWeeklySpinConfig(nextAudience, adminUserId);
       setWeeklySpinAudience(nextAudience);
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to update weekly spin settings.";
       Alert.alert("Update failed", message);
@@ -463,6 +490,10 @@ export default function AdminScreen() {
       setCampaignEndTime(formatTimeValue(nextDefaultEnd));
       Alert.alert("Campaign created", "Weekly spin campaign saved successfully.");
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message =
         error instanceof Error ? error.message : "Unable to create weekly spin campaign.";
       Alert.alert("Update failed", message);
@@ -544,6 +575,10 @@ export default function AdminScreen() {
       setSelectedCampaign(null);
       Alert.alert("Campaign published", `Campaign #${campaign.campaignNumber} is now active.`);
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message = error instanceof Error ? error.message : "Unable to publish campaign.";
       Alert.alert("Update failed", message);
     } finally {
@@ -562,6 +597,10 @@ export default function AdminScreen() {
       setSelectedCampaign(null);
       Alert.alert("Campaign deleted", `Campaign #${campaign.campaignNumber} was deleted.`);
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message = error instanceof Error ? error.message : "Unable to delete campaign.";
       Alert.alert("Delete failed", message);
     } finally {
@@ -580,6 +619,10 @@ export default function AdminScreen() {
       setSelectedCampaign(null);
       Alert.alert("Campaign disabled", "The active campaign has been disabled.");
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message = error instanceof Error ? error.message : "Unable to disable campaign.";
       Alert.alert("Update failed", message);
     } finally {
@@ -627,6 +670,10 @@ export default function AdminScreen() {
         `Granted bonus to ${result.recipientCount} users.`
       );
     } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       const message = error instanceof Error ? error.message : "Unable to apply global bonus.";
       Alert.alert("Bonus failed", message);
     } finally {
@@ -1481,6 +1528,7 @@ export default function AdminScreen() {
           }}
         />
       ) : null}
+      <FallbackIssueModal issue={fallbackIssue} onClose={() => setFallbackIssue(null)} />
     </SafeAreaView>
   );
 }
