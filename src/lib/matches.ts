@@ -523,8 +523,14 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       }
 
       if (prediction.selectedTeam === winner) {
-        const hasDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
-        const hasDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
+        const hasPendingDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
+        const hasPendingDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
+        const hasAppliedDoublePointsReward =
+          prediction.appliedRewardType === "points_x2_next_win";
+        const hasAppliedDoubleCoinReward =
+          prediction.appliedRewardType === "coins_x2_next_match_win";
+        const hasDoublePointsBoost = hasPendingDoublePointsBoost || hasAppliedDoublePointsReward;
+        const hasDoubleCoinBoost = hasPendingDoubleCoinBoost || hasAppliedDoubleCoinReward;
         const payoutMultiplier = hasDoubleCoinBoost ? 2 : 1;
         const pointsMultiplier = hasDoublePointsBoost ? 2 : 1;
         const payout = prediction.amount * 2 * payoutMultiplier;
@@ -541,8 +547,8 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
           wins: userData.wins + 1,
           wheelPointsEarned: nextWheelPointsEarned,
           wheelCoinsEarned: nextWheelCoinsEarned,
-          hasPendingDoublePointsNextWin: hasDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
-          hasPendingDoubleCoinNextMatchWin: hasDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
+          hasPendingDoublePointsNextWin: hasPendingDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
+          hasPendingDoubleCoinNextMatchWin: hasPendingDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
           updatedAt: serverTimestamp(),
         });
 
@@ -612,15 +618,15 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
       const insuranceBonusPoints = insuranceRefund > 0 ? 1 : 0;
       const walletDebitAmount = prediction.walletDebitAmount ?? prediction.amount;
       const nextBalance = userData.balance + insuranceRefund;
-      const hasDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
-      const hasDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
+      const hasPendingDoublePointsBoost = !!userData.hasPendingDoublePointsNextWin;
+      const hasPendingDoubleCoinBoost = !!userData.hasPendingDoubleCoinNextMatchWin;
 
       transaction.update(userRef, {
         balance: nextBalance,
         losses: userData.losses + 1,
         points: userData.points + insuranceBonusPoints,
-        hasPendingDoublePointsNextWin: hasDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
-        hasPendingDoubleCoinNextMatchWin: hasDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
+        hasPendingDoublePointsNextWin: hasPendingDoublePointsBoost ? false : userData.hasPendingDoublePointsNextWin ?? false,
+        hasPendingDoubleCoinNextMatchWin: hasPendingDoubleCoinBoost ? false : userData.hasPendingDoubleCoinNextMatchWin ?? false,
         updatedAt: serverTimestamp(),
       });
 
