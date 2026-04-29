@@ -37,28 +37,28 @@ export const SPECIAL_REWARD_CAP_AMOUNT = 8000;
 export const DEFAULT_WEEKLY_SPIN_AUDIENCE: WeeklySpinAudience = "all_active_users";
 
 export const WEEKLY_SPIN_SEGMENTS: WeeklySpinSegmentConfig[] = [
-  { id: "coins_5000", label: "5000 Coins", kind: "coins", value: 5000, capAmount: null, weight: 18 },
-  { id: "coins_10000", label: "10000 Coins", kind: "coins", value: 10000, capAmount: null, weight: 14 },
+  { id: "coins_5000", label: "5000 Coins", kind: "coins", value: 5000, capAmount: null, weight: 34 },
+  { id: "coins_10000", label: "10000 Coins", kind: "coins", value: 10000, capAmount: null, weight: 24 },
   {
     id: "points_x2_next_win",
     label: "Points x2 on next win",
     kind: "points_x2_next_win",
     value: null,
     capAmount: null,
-    weight: 28,
+    weight: 19,
   },
-  { id: "coins_30000", label: "30000 Coins", kind: "coins", value: 30000, capAmount: null, weight: 1 },
-  { id: "coins_1000", label: "1000 Coins", kind: "coins", value: 1000, capAmount: null, weight: 20 },
-  { id: "points_2", label: "2 Points", kind: "points", value: 2, capAmount: null, weight: 2 },
-  { id: "spin_again", label: "Spin Again", kind: "spin_again", value: null, capAmount: null, weight: 24 },
-  { id: "points_5", label: "5 Points", kind: "points", value: 5, capAmount: null, weight: 1 },
+  { id: "coins_30000", label: "30000 Coins", kind: "coins", value: 30000, capAmount: null, weight: 24 },
+  { id: "coins_1000", label: "1000 Coins", kind: "coins", value: 1000, capAmount: null, weight: 48 },
+  { id: "points_2", label: "2 Points", kind: "points", value: 2, capAmount: null, weight: 12 },
+  { id: "spin_again", label: "Spin Again", kind: "spin_again", value: null, capAmount: null, weight: 10 },
+  { id: "points_5", label: "5 Points", kind: "points", value: 5, capAmount: null, weight: 7 },
   {
     id: "ticket_a",
     label: "Free Bet Ticket",
     kind: "free_bet_ticket",
     value: null,
     capAmount: null,
-    weight: 5,
+    weight: 13,
   },
   {
     id: "insurance",
@@ -66,7 +66,7 @@ export const WEEKLY_SPIN_SEGMENTS: WeeklySpinSegmentConfig[] = [
     kind: "bet_insurance",
     value: null,
     capAmount: SPECIAL_REWARD_CAP_AMOUNT,
-    weight: 5,
+    weight: 19,
   },
   {
     id: "coins_x2_next_match_win",
@@ -82,7 +82,7 @@ export const WEEKLY_SPIN_SEGMENTS: WeeklySpinSegmentConfig[] = [
     kind: "free_bet_ticket",
     value: null,
     capAmount: null,
-    weight: 6,
+    weight: 16,
   },
 ];
 
