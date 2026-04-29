@@ -17,7 +17,9 @@ import { SvgUri } from "react-native-svg";
 
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
+import { FallbackIssueModal } from "@/components/FallbackIssueModal";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
+import { resolveFallbackIssue, type FallbackIssue } from "@/lib/error-fallback";
 import {
   getNextScheduledWeeklySpinCampaign,
   getWeeklySpinStatus,
@@ -53,6 +55,7 @@ export default function WeeklySpinScreen() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusText, setStatusText] = useState("");
+  const [fallbackIssue, setFallbackIssue] = useState<FallbackIssue | null>(null);
   const [result, setResult] = useState<WeeklySpinResultRecord | null>(null);
   const [hasUsedSpin, setHasUsedSpin] = useState(false);
   const [nextCampaign, setNextCampaign] = useState<WeeklySpinCampaignRecord | null>(null);
@@ -146,6 +149,10 @@ export default function WeeklySpinScreen() {
         if (!isActive) {
           return;
         }
+        const fallback = resolveFallbackIssue(nextError);
+        if (fallback) {
+          setFallbackIssue(fallback);
+        }
 
         setError(nextError instanceof Error ? nextError.message : "Unable to load weekly spin.");
       })
@@ -218,6 +225,10 @@ export default function WeeklySpinScreen() {
         setIsSpinning(false);
       });
     } catch (nextError) {
+      const fallback = resolveFallbackIssue(nextError);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
       setError(nextError instanceof Error ? nextError.message : "Unable to complete the spin.");
       setIsSpinning(false);
     }
@@ -338,6 +349,15 @@ export default function WeeklySpinScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      {isSpinning ? (
+        <View style={styles.processingOverlay}>
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color="#F7FAFF" />
+            <Text style={styles.processingText}>Processing spin...</Text>
+          </View>
+        </View>
+      ) : null}
+      <FallbackIssueModal issue={fallbackIssue} onClose={() => setFallbackIssue(null)} />
     </SafeAreaView>
   );
 }
@@ -507,6 +527,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
     letterSpacing: 0.2,
+  },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(7, 14, 28, 0.62)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  processingCard: {
+    minWidth: 220,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#355586",
+    backgroundColor: "#173055",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  processingText: {
+    color: "#E7EEFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
   errorCard: {
     borderRadius: 16,
