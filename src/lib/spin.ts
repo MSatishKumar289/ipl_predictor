@@ -88,6 +88,14 @@ function normalizeWeeklySpinConfig(
   snapshot: Partial<WeeklySpinConfig> | null | undefined
 ): WeeklySpinConfig {
   const audience = snapshot?.audience;
+  const activeCampaignId =
+    typeof snapshot?.activeCampaignId === "string" ? snapshot.activeCampaignId : null;
+  const activeCampaignNumber =
+    typeof snapshot?.activeCampaignNumber === "number" ? snapshot.activeCampaignNumber : null;
+  const activeCampaignStartAt =
+    typeof snapshot?.activeCampaignStartAt === "string" ? snapshot.activeCampaignStartAt : null;
+  const activeCampaignEndAt =
+    typeof snapshot?.activeCampaignEndAt === "string" ? snapshot.activeCampaignEndAt : null;
 
   if (
     audience === "disabled" ||
@@ -96,6 +104,10 @@ function normalizeWeeklySpinConfig(
   ) {
     return {
       audience,
+      activeCampaignId,
+      activeCampaignNumber,
+      activeCampaignStartAt,
+      activeCampaignEndAt,
       updatedAt: snapshot?.updatedAt ?? null,
       updatedBy: snapshot?.updatedBy ?? null,
     };
@@ -103,6 +115,10 @@ function normalizeWeeklySpinConfig(
 
   return {
     audience: DEFAULT_WEEKLY_SPIN_AUDIENCE,
+    activeCampaignId,
+    activeCampaignNumber,
+    activeCampaignStartAt,
+    activeCampaignEndAt,
     updatedAt: snapshot?.updatedAt ?? null,
     updatedBy: snapshot?.updatedBy ?? null,
   };
@@ -459,6 +475,23 @@ export async function publishWeeklySpinCampaign(campaignId: string, updatedBy: s
         activeCampaignNumber: campaign.campaignNumber,
         activeCampaignStartAt: campaign.startAt,
         activeCampaignEndAt: campaign.endAt,
+        updatedAt: serverTimestamp(),
+        updatedBy,
+      } satisfies Partial<WeeklySpinConfig>,
+      { merge: true }
+    );
+  });
+}
+
+export async function unpublishWeeklySpinCampaign(updatedBy: string) {
+  await runTransaction(db, async (transaction) => {
+    transaction.set(
+      WEEKLY_SPIN_CONFIG_DOC,
+      {
+        activeCampaignId: null,
+        activeCampaignNumber: null,
+        activeCampaignStartAt: null,
+        activeCampaignEndAt: null,
         updatedAt: serverTimestamp(),
         updatedBy,
       } satisfies Partial<WeeklySpinConfig>,
