@@ -40,7 +40,7 @@
       <circle cx="538" cy="178" r="6" fill="#FFE38E" />
     </g>
     <g transform="rotate(75 500 500)">
-      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="28" font-weight="600">2xPts</text>
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="28" font-weight="600">2xpt</text>
     </g>
     <g transform="rotate(105 500 500)">
       <text x="488" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">30K</text>
@@ -56,7 +56,7 @@
       <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">2pt</text>
     </g>
     <g transform="rotate(195 500 500)">
-      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">Again</text>
+      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="22" font-weight="600">Spin Again</text>
     </g>
     <g transform="rotate(225 500 500)">
       <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="36" font-weight="600">5pt</text>
@@ -69,7 +69,9 @@
       <path d="M468 206 L482 206 L490 194 L500 218 L510 196 L518 206 L532 206" stroke="#111111" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
     </g>
     <g transform="rotate(315 500 500)">
-      <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="24" font-weight="600">2xCoin</text>
+      <text x="492" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="24" font-weight="600">2x</text>
+      <circle cx="528" cy="178" r="12" fill="#F6C64A" stroke="#D99B1F" stroke-width="2" />
+      <circle cx="528" cy="178" r="6" fill="#FFE38E" />
     </g>
     <g transform="rotate(345 500 500)">
       <text x="500" y="190" text-anchor="middle" fill="#111111" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="30" font-weight="600">+1TKT</text>
