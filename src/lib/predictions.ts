@@ -35,6 +35,41 @@ function predictionId(matchId: string, userId: string) {
   return `${matchId}_${userId}`;
 }
 
+function getTimestampValue(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
+    return value.toMillis();
+  }
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
+    return value.seconds * 1000;
+  }
+  return 0;
+}
+
+function resolveRewardStatusOnRelease(reward: UserRewardRecord) {
+  const expiresAtMs = getTimestampValue(reward.expiresAt);
+  if (expiresAtMs > 0 && expiresAtMs <= Date.now()) {
+    return "expired" as const;
+  }
+  return "available" as const;
+}
+
 export function subscribeToUserPrediction(
   matchId: string,
   userId: string,
@@ -223,19 +258,33 @@ export async function placeOrEditPrediction({
     const previousRewardId = existingPrediction?.appliedRewardId ?? null;
     const nextRewardId = appliedReward?.id ?? null;
 
+    const nextRewardData = nextRewardSnapshot?.exists()
+      ? (nextRewardSnapshot.data() as UserRewardRecord)
+      : null;
+    const nextRewardExpiryMs = getTimestampValue(nextRewardData?.expiresAt);
+    const isNextRewardExpired = nextRewardExpiryMs > 0 && nextRewardExpiryMs <= Date.now();
+
     if (
       nextRewardSnapshot &&
       (!nextRewardSnapshot.exists() ||
-        (nextRewardSnapshot.data() as UserRewardRecord).userId !== userId ||
-        ((nextRewardSnapshot.data() as UserRewardRecord).status !== "available" &&
+        nextRewardData!.userId !== userId ||
+        (nextRewardData!.status !== "available" &&
           nextRewardId !== previousRewardId))
     ) {
       throw new Error("Selected reward is no longer available.");
     }
+    if (isNextRewardExpired && nextRewardId !== previousRewardId) {
+      transaction.update(nextRewardRef!, {
+        status: "expired",
+        updatedAt: serverTimestamp(),
+      });
+      throw new Error("Selected reward has expired.");
+    }
 
     if (previousRewardId && previousRewardId !== nextRewardId && previousRewardSnapshot?.exists()) {
+      const previousRewardData = previousRewardSnapshot.data() as UserRewardRecord;
       transaction.update(previousRewardRef!, {
-        status: "available",
+        status: resolveRewardStatusOnRelease(previousRewardData),
         usedPredictionId: null,
         usedMatchId: null,
         usedAt: null,
@@ -434,8 +483,13 @@ export async function deletePrediction({
     });
 
     if (livePrediction.appliedRewardId) {
+      const rewardRef = doc(db, "user_rewards", livePrediction.appliedRewardId);
+      const rewardSnapshot = await transaction.get(rewardRef);
+      const rewardData = rewardSnapshot.exists()
+        ? (rewardSnapshot.data() as UserRewardRecord)
+        : null;
       transaction.update(doc(db, "user_rewards", livePrediction.appliedRewardId), {
-        status: "available",
+        status: rewardData ? resolveRewardStatusOnRelease(rewardData) : "available",
         usedPredictionId: null,
         usedMatchId: null,
         usedAt: null,

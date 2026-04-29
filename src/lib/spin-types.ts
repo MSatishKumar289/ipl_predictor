@@ -57,9 +57,13 @@ export type WeeklySpinCampaignRecord = {
   updatedAt?: unknown;
 };
 
-export type UserRewardType = "free_bet_ticket" | "bet_insurance";
+export type UserRewardType =
+  | "free_bet_ticket"
+  | "bet_insurance"
+  | "points_x2_next_win"
+  | "coins_x2_next_match_win";
 
-export type UserRewardStatus = "available" | "used";
+export type UserRewardStatus = "available" | "used" | "expired";
 
 export type UserRewardRecord = {
   id: string;
@@ -76,6 +80,7 @@ export type UserRewardRecord = {
   createdAt?: unknown;
   updatedAt?: unknown;
   usedAt?: unknown;
+  expiresAt?: unknown;
 };
 
 export type WeeklySpinStatus = {

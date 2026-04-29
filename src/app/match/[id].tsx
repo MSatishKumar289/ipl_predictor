@@ -277,7 +277,7 @@ export default function MatchDetailScreen() {
     (profile?.balance ?? 0) + (prediction?.walletDebitAmount ?? prediction?.amount ?? 0);
   const maximumAllowedBet = getMaximumAllowedBet(availableBalance);
   const attachedReward =
-    prediction?.appliedRewardId && prediction.appliedRewardType && prediction.appliedRewardCapAmount
+    prediction?.appliedRewardId && prediction.appliedRewardType
       ? ({
           id: prediction.appliedRewardId,
           userId: user?.uid ?? "",
@@ -286,12 +286,16 @@ export default function MatchDetailScreen() {
             prediction.appliedRewardLabel ??
             (prediction.appliedRewardType === "free_bet_ticket"
               ? "Free Bet Ticket"
-              : "Bet Insurance"),
+              : prediction.appliedRewardType === "points_x2_next_win"
+                ? "2x Points on next win"
+                : prediction.appliedRewardType === "coins_x2_next_match_win"
+                  ? "2x Coins on next match win"
+                  : "Bet Insurance"),
           status: "used",
           sourceType: "weekly_spin",
           sourceCycleId: "",
           sourceSpinResultId: "",
-          capAmount: prediction.appliedRewardCapAmount,
+          capAmount: prediction.appliedRewardCapAmount ?? null,
         } satisfies UserRewardRecord)
       : null;
   const rewardOptions = attachedReward

@@ -47,14 +47,39 @@ export default function RewardsScreen() {
     };
   }, [user]);
 
-  const activeRewards = useMemo(
-    () => rewards.filter((reward) => reward.status === "available"),
-    [rewards]
-  );
+  const activeRewards = useMemo(() => {
+    const now = Date.now();
+    return rewards.filter((reward) => {
+      if (reward.status !== "available") {
+        return false;
+      }
+      if (
+        reward.type !== "points_x2_next_win" &&
+        reward.type !== "coins_x2_next_match_win"
+      ) {
+        return true;
+      }
+      const expiryTime = getTimestampValue(reward.expiresAt);
+      return expiryTime <= 0 || expiryTime > now;
+    });
+  }, [rewards]);
   const usedRewards = useMemo(
     () =>
       rewards
-        .filter((reward) => reward.status === "used")
+        .filter((reward) => {
+          if (reward.status === "used" || reward.status === "expired") {
+            return true;
+          }
+          if (
+            reward.status === "available" &&
+            (reward.type === "points_x2_next_win" ||
+              reward.type === "coins_x2_next_match_win")
+          ) {
+            const expiryTime = getTimestampValue(reward.expiresAt);
+            return expiryTime > 0 && expiryTime <= Date.now();
+          }
+          return false;
+        })
         .sort((left, right) => getTimestampValue(right.usedAt) - getTimestampValue(left.usedAt)),
     [rewards]
   );
@@ -71,8 +96,11 @@ export default function RewardsScreen() {
     id: reward.id,
     title: reward.label,
     detail: reward.capAmount ? `up to ${reward.capAmount.toLocaleString("en-IN")} coins` : null,
-    subtitle: formatDateTime(reward.usedAt),
-    statusLabel: "Used",
+    subtitle:
+      reward.status === "used"
+        ? formatDateTime(reward.usedAt)
+        : `Expired ${formatDateTime(reward.expiresAt)}`,
+    statusLabel: reward.status === "used" ? "Used" : "Expired",
   }));
 
   const spinHistoryRows = spinHistory.map((entry) => ({
