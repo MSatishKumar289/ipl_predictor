@@ -494,6 +494,122 @@ export function subscribeToAllUsers(
   );
 }
 
+export async function applyGlobalBonus({
+  adminUserId,
+  bonusPoints,
+  bonusCoins,
+  reason,
+}: {
+  adminUserId: string;
+  bonusPoints: number;
+  bonusCoins: number;
+  reason: string;
+}) {
+  const { db } = getFirebaseServices();
+  const points = Math.max(0, Math.floor(bonusPoints || 0));
+  const coins = Math.max(0, Math.floor(bonusCoins || 0));
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) {
+    throw new Error("Bonus reason is required.");
+  }
+
+  if (points <= 0 && coins <= 0) {
+    throw new Error("Enter bonus points or bonus coins.");
+  }
+
+  const usersSnapshot = await getDocs(collection(db, "users"));
+  const targetUsers = usersSnapshot.docs.filter((entry) => {
+    const data = entry.data() as UserProfile;
+    return data.role !== "admin";
+  });
+
+  if (!targetUsers.length) {
+    throw new Error("No eligible users found for bonus.");
+  }
+
+  const grantRef = doc(collection(db, "bonus_grants"));
+  const grantId = grantRef.id;
+  const issuedAt = serverTimestamp();
+  const noticeTitle =
+    points > 0 && coins > 0
+      ? "Admin Bonus: Points + Coins"
+      : points > 0
+        ? "Admin Bonus: Points"
+        : "Admin Bonus: Coins";
+  const noticeMessage =
+    points > 0 && coins > 0
+      ? `You received ${points} bonus points and ${coins.toLocaleString("en-IN")} bonus coins.`
+      : points > 0
+        ? `You received ${points} bonus points.`
+        : `You received ${coins.toLocaleString("en-IN")} bonus coins.`;
+
+  await writeBatch(db)
+    .set(grantRef, {
+      points,
+      coins,
+      reason: trimmedReason,
+      createdBy: adminUserId,
+      recipientCount: targetUsers.length,
+      createdAt: issuedAt,
+      updatedAt: issuedAt,
+    })
+    .commit();
+
+  const CHUNK_SIZE = 140;
+  for (let index = 0; index < targetUsers.length; index += CHUNK_SIZE) {
+    const batch = writeBatch(db);
+    for (const userDoc of targetUsers.slice(index, index + CHUNK_SIZE)) {
+      const currentUser = userDoc.data() as UserProfile;
+      const nextPoints = (currentUser.points ?? 0) + points;
+      const nextBalance = (currentUser.balance ?? 0) + coins;
+
+      batch.update(userDoc.ref, {
+        points: nextPoints,
+        balance: nextBalance,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (coins > 0) {
+        const transactionRef = doc(collection(db, "transactions"));
+        batch.set(transactionRef, {
+          userId: userDoc.id,
+          type: "admin_bonus_coin_credit",
+          amount: coins,
+          balanceBefore: currentUser.balance ?? 0,
+          balanceAfter: nextBalance,
+          referenceType: "admin_bonus",
+          referenceId: grantId,
+          note: trimmedReason,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      const notificationRef = doc(db, "user_notifications", `${grantId}_${userDoc.id}`);
+      batch.set(notificationRef, {
+        userId: userDoc.id,
+        type: "admin_bonus",
+        title: noticeTitle,
+        message: noticeMessage,
+        reason: trimmedReason,
+        points,
+        coins,
+        bonusGrantId: grantId,
+        seen: false,
+        createdAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  return {
+    grantId,
+    recipientCount: targetUsers.length,
+    points,
+    coins,
+  };
+}
+
 export async function deleteUserRecords(uid: string) {
   const { db } = getFirebaseServices();
   const userRef = doc(db, "users", uid);
