@@ -127,9 +127,11 @@ export default function LeaderboardTab() {
   const userNameById = useMemo(
     () =>
       new Map(
-        rankedUsers.map((entry) => [entry.uid, entry.displayName] as const)
+        [...listedUsers, ...unlistedUsers].map(
+          (entry) => [entry.uid, entry.displayName] as const
+        )
       ),
-    [rankedUsers]
+    [listedUsers, unlistedUsers]
   );
 
   const winnersRows = useMemo(
