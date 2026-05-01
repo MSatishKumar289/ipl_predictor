@@ -36,7 +36,6 @@ import {
   MINIMUM_BET,
   placeOrEditPrediction,
   subscribeToMatchPredictions,
-  subscribeToUserPrediction,
 } from "@/lib/predictions";
 import type { MatchRecord } from "@/lib/match-types";
 import type { PredictionSelection, PredictionRecord } from "@/lib/prediction-types";
@@ -45,6 +44,7 @@ import {
   subscribeToAvailableRewards,
 } from "@/lib/spin";
 import type { UserRewardRecord } from "@/lib/spin-types";
+import { useAppData } from "@/providers/AppDataProvider";
 
 function teamLabel(match: MatchRecord, selection: PredictionSelection) {
   return selection === "teamA" ? match.teamAShort : match.teamBShort;
@@ -146,6 +146,7 @@ function getPredictionErrorConfig(message: string) {
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
+  const { userPredictionsByMatchId } = useAppData();
   const { width } = useWindowDimensions();
   const [match, setMatch] = useState<MatchRecord | null>(null);
   const [prediction, setPrediction] = useState<PredictionRecord | null>(null);
@@ -214,24 +215,13 @@ export default function MatchDetailScreen() {
       return;
     }
 
-    const unsubscribe = subscribeToUserPrediction(
-      id,
-      user.uid,
-      (nextPrediction) => {
-        setPrediction(nextPrediction);
-        setPredictionError(null);
-        setSelection(nextPrediction?.selectedTeam ?? "teamA");
-        setAmount(nextPrediction ? String(nextPrediction.amount) : "");
-        setSelectedRewardId(nextPrediction?.appliedRewardId ?? null);
-        setIsEditingPrediction(false);
-      },
-      (error) => {
-        setPredictionError(`Your prediction read failed: ${error.message}`);
-      }
-    );
-
-    return unsubscribe;
-  }, [id, user]);
+    const nextPrediction = userPredictionsByMatchId[id] ?? null;
+    setPrediction(nextPrediction);
+    setSelection(nextPrediction?.selectedTeam ?? "teamA");
+    setAmount(nextPrediction ? String(nextPrediction.amount) : "");
+    setSelectedRewardId(nextPrediction?.appliedRewardId ?? null);
+    setIsEditingPrediction(false);
+  }, [id, user, userPredictionsByMatchId]);
 
   useEffect(() => {
     if (!id) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -16,9 +16,8 @@ import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
 import { LockIcon } from "@/components/LockIcon";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
-import { getBettingState, subscribeToMatches } from "@/lib/matches";
+import { getBettingState } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
-import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
 import {
   getWeeklySpinConfig,
@@ -26,6 +25,7 @@ import {
   hasUserPlayedAnyWeeklySpin,
 } from "@/lib/spin";
 import { useAuth } from "@/providers/AuthProvider";
+import { useAppData } from "@/providers/AppDataProvider";
 
 type MatchFilter = "upcoming" | "live" | "completed";
 const appTimeZone = "Asia/Kolkata";
@@ -38,11 +38,15 @@ const filters: { key: MatchFilter; label: string }[] = [
 
 export default function HomeTab() {
   const { user, profile } = useAuth();
+  const {
+    matches,
+    isMatchesLoading: isLoadingMatches,
+    matchesError,
+    userPredictionsByMatchId,
+    userPredictionsError,
+  } = useAppData();
   const { width } = useWindowDimensions();
   const [activeFilter, setActiveFilter] = useState<MatchFilter>("upcoming");
-  const [matches, setMatches] = useState<MatchRecord[]>([]);
-  const [predictions, setPredictions] = useState<Record<string, PredictionRecord>>({});
-  const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
@@ -58,108 +62,74 @@ export default function HomeTab() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeToMatches(
-      (nextMatches) => {
-        setMatches(nextMatches);
-        setError(null);
-        setIsLoadingMatches(false);
-      },
-      (snapshotError) => {
-        setError(`Matches read failed: ${snapshotError.message}`);
-        setIsLoadingMatches(false);
+    setError(matchesError ?? userPredictionsError ?? null);
+  }, [matchesError, userPredictionsError]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      if (!user) {
+        setIsSpinEligible(false);
+        setIsSpinLoading(false);
+
+        return () => {
+          isActive = false;
+        };
       }
-    );
 
-    return unsubscribe;
-  }, []);
+      setIsSpinLoading(true);
 
-  useEffect(() => {
-    if (!user) {
-      setPredictions({});
-      return;
-    }
+      void getWeeklySpinStatus(user.uid)
+        .then(async (status) => {
+          if (!isActive) {
+            return;
+          }
 
-    const unsubscribe = subscribeToUserPredictions(
-      user.uid,
-      (nextPredictions) => {
-        setPredictions(
-          nextPredictions.reduce<Record<string, PredictionRecord>>((accumulator, prediction) => {
-            accumulator[prediction.matchId] = prediction;
-            return accumulator;
-          }, {})
-        );
-      },
-      (snapshotError) => {
-        setError((current) => current ?? `Predictions read failed: ${snapshotError.message}`);
-      }
-    );
+          setIsSpinEligible(status.eligible);
+          const hasPlayedAnySpin = status.hasUsedSpin || (await hasUserPlayedAnyWeeklySpin(user.uid));
+          if (!isActive) {
+            return;
+          }
+          setHasUsedSpin(hasPlayedAnySpin);
 
-    return unsubscribe;
-  }, [user]);
+          if (hasPlayedAnySpin) {
+            const config = await getWeeklySpinConfig();
+            if (!isActive) {
+              return;
+            }
+            const publishedStartAt = config.activeCampaignStartAt ?? null;
+            const publishedStartAtMs = publishedStartAt ? Date.parse(publishedStartAt) : 0;
+            setNextSpinStartAt(
+              publishedStartAt && publishedStartAtMs > Date.now() ? publishedStartAt : null
+            );
+            return;
+          }
 
-  useFocusEffect(() => {
-    let isActive = true;
+          setNextSpinStartAt(null);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
 
-    if (!user) {
-      setIsSpinEligible(false);
-      setIsSpinLoading(false);
+          setIsSpinEligible(false);
+          setHasUsedSpin(false);
+          setNextSpinStartAt(null);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+
+          setIsSpinLoading(false);
+        });
 
       return () => {
         isActive = false;
       };
-    }
-
-    setIsSpinLoading(true);
-
-    void getWeeklySpinStatus(user.uid)
-      .then(async (status) => {
-        if (!isActive) {
-          return;
-        }
-
-        setIsSpinEligible(status.eligible);
-        const hasPlayedAnySpin = status.hasUsedSpin || (await hasUserPlayedAnyWeeklySpin(user.uid));
-        if (!isActive) {
-          return;
-        }
-        setHasUsedSpin(hasPlayedAnySpin);
-
-        if (hasPlayedAnySpin) {
-          const config = await getWeeklySpinConfig();
-          if (!isActive) {
-            return;
-          }
-          const publishedStartAt = config.activeCampaignStartAt ?? null;
-          const publishedStartAtMs = publishedStartAt ? Date.parse(publishedStartAt) : 0;
-          setNextSpinStartAt(
-            publishedStartAt && publishedStartAtMs > Date.now() ? publishedStartAt : null
-          );
-          return;
-        }
-
-        setNextSpinStartAt(null);
-      })
-      .catch(() => {
-        if (!isActive) {
-          return;
-        }
-
-        setIsSpinEligible(false);
-        setHasUsedSpin(false);
-        setNextSpinStartAt(null);
-      })
-      .finally(() => {
-        if (!isActive) {
-          return;
-        }
-
-        setIsSpinLoading(false);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  });
+    }, [user])
+  );
 
   useEffect(() => {
     if (!hasUsedSpin || !nextSpinStartAt) {
@@ -299,7 +269,7 @@ export default function HomeTab() {
                       <FeaturedMatchCard
                         key={match.id}
                         match={match}
-                        prediction={predictions[match.id] ?? null}
+                        prediction={userPredictionsByMatchId[match.id] ?? null}
                         compact={width < 768}
                         onOpen={() => openMatch(match.id)}
                       />

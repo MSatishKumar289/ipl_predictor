@@ -6,6 +6,7 @@ import { RouteFallbackScreen } from "@/components/RouteFallbackScreen";
 import { QuickRulesWidget } from "@/components/QuickRulesWidget";
 import { BonusNoticePopup } from "@/components/BonusNoticePopup";
 import { logout } from "@/lib/auth";
+import { AppDataProvider } from "@/providers/AppDataProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -31,7 +32,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <AuthGate />
+      <AppDataProvider>
+        <AuthGate />
+      </AppDataProvider>
     </AuthProvider>
   );
 }

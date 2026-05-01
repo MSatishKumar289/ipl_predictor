@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
@@ -24,28 +25,32 @@ export default function RewardsScreen() {
   const [spinHistory, setSpinHistory] = useState<WeeklySpinResultRecord[]>([]);
   const [activeTab, setActiveTab] = useState<RewardsTab>("available");
 
-  useEffect(() => {
-    if (!user) {
-      setRewards([]);
-      setSpinHistory([]);
-      setIsLoading(false);
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
+        setRewards([]);
+        setSpinHistory([]);
+        setIsLoading(false);
+        return () => {};
+      }
 
-    const unsubscribeRewards = subscribeToAllRewards(user.uid, (nextRewards) => {
-      setRewards(nextRewards);
-      setIsLoading(false);
-    });
-    const unsubscribeHistory = subscribeToWeeklySpinHistory(user.uid, (nextHistory) => {
-      setSpinHistory(nextHistory);
-      setIsLoading(false);
-    });
+      setIsLoading(true);
 
-    return () => {
-      unsubscribeRewards();
-      unsubscribeHistory();
-    };
-  }, [user]);
+      const unsubscribeRewards = subscribeToAllRewards(user.uid, (nextRewards) => {
+        setRewards(nextRewards);
+        setIsLoading(false);
+      });
+      const unsubscribeHistory = subscribeToWeeklySpinHistory(user.uid, (nextHistory) => {
+        setSpinHistory(nextHistory);
+        setIsLoading(false);
+      });
+
+      return () => {
+        unsubscribeRewards();
+        unsubscribeHistory();
+      };
+    }, [user])
+  );
 
   const activeRewards = useMemo(() => {
     const now = Date.now();
