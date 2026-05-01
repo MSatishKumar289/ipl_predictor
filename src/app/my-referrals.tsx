@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
@@ -138,31 +139,33 @@ export default function MyReferralsScreen() {
   const [error, setError] = useState<string | null>(null);
   const isCompact = width < 720;
 
-  useEffect(() => {
-    if (!user) {
-      setReferrals([]);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-
-    const unsubscribe = subscribeToUserReferrals(
-      user.uid,
-      (nextReferrals) => {
-        setReferrals(nextReferrals);
-        setError(null);
-        setIsLoading(false);
-      },
-      (nextError) => {
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
         setReferrals([]);
-        setError(`Referrals read failed: ${nextError.message}`);
         setIsLoading(false);
+        return () => {};
       }
-    );
 
-    return unsubscribe;
-  }, [user]);
+      setIsLoading(true);
+
+      const unsubscribe = subscribeToUserReferrals(
+        user.uid,
+        (nextReferrals) => {
+          setReferrals(nextReferrals);
+          setError(null);
+          setIsLoading(false);
+        },
+        (nextError) => {
+          setReferrals([]);
+          setError(`Referrals read failed: ${nextError.message}`);
+          setIsLoading(false);
+        }
+      );
+
+      return unsubscribe;
+    }, [user])
+  );
 
   const totals = useMemo(
     () => ({
