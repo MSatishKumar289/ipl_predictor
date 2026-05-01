@@ -1,8 +1,22 @@
 {
-  "rewrites": [
+  "headers": [
     {
-      "source": "/(.*)",
-      "destination": "/"
+      "source": "/app-version.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, stale-while-revalidate=300"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/"
     }
   ]
 }
