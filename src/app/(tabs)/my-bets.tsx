@@ -15,11 +15,9 @@ import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
-import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
-import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
-import { useAuth } from "@/providers/AuthProvider";
+import { useAppData } from "@/providers/AppDataProvider";
 
 type BetFilter = "active" | "settled" | "all";
 
@@ -59,55 +57,24 @@ function getTimestampValue(value: unknown) {
 }
 
 export default function MyBetsTab() {
-  const { user } = useAuth();
+  const {
+    matches,
+    userPredictions: predictions,
+    isMatchesLoading: isLoadingMatches,
+    isUserPredictionsLoading: isLoadingPredictions,
+    matchesError,
+    userPredictionsError,
+  } = useAppData();
   const { width } = useWindowDimensions();
   const [activeFilter, setActiveFilter] = useState<BetFilter>("active");
-  const [predictions, setPredictions] = useState<PredictionRecord[]>([]);
-  const [matches, setMatches] = useState<MatchRecord[]>([]);
-  const [isLoadingPredictions, setIsLoadingPredictions] = useState(true);
-  const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isDesktop = width >= 1024;
   const isCompact = width < 820;
 
   useEffect(() => {
-    const unsubscribe = subscribeToMatches(
-      (nextMatches) => {
-        setMatches(nextMatches);
-        setIsLoadingMatches(false);
-      },
-      (snapshotError) => {
-        setError((current) => current ?? `Matches read failed: ${snapshotError.message}`);
-        setIsLoadingMatches(false);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (!user) {
-      setPredictions([]);
-      setIsLoadingPredictions(false);
-      return;
-    }
-
-    const unsubscribe = subscribeToUserPredictions(
-      user.uid,
-      (nextPredictions) => {
-        setPredictions(nextPredictions);
-        setError(null);
-        setIsLoadingPredictions(false);
-      },
-      (snapshotError) => {
-        setError(`Bets read failed: ${snapshotError.message}`);
-        setIsLoadingPredictions(false);
-      }
-    );
-
-    return unsubscribe;
-  }, [user]);
+    setError(matchesError ?? userPredictionsError ?? null);
+  }, [matchesError, userPredictionsError]);
 
   const bets = useMemo<EnrichedBet[]>(
     () =>

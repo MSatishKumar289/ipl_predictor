@@ -13,32 +13,14 @@ import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
-import { subscribeToMatches } from "@/lib/matches";
 import type { MatchRecord } from "@/lib/match-types";
+import { useAppData } from "@/providers/AppDataProvider";
 
 export default function FixturesScreen() {
+  const { matches, isMatchesLoading: isLoading, matchesError: error } = useAppData();
   const { width } = useWindowDimensions();
-  const [matches, setMatches] = useState<MatchRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isCompact = width < 720;
-
-  useEffect(() => {
-    const unsubscribe = subscribeToMatches(
-      (nextMatches) => {
-        setMatches(nextMatches);
-        setError(null);
-        setIsLoading(false);
-      },
-      (snapshotError) => {
-        setError(`Fixtures read failed: ${snapshotError.message}`);
-        setIsLoading(false);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
 
   return (
     <SafeAreaView style={styles.screen}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 
@@ -16,8 +17,8 @@ import { BackButton } from "@/components/BackButton";
 import { CoinAmount } from "@/components/CoinAmount";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { db } from "@/lib/firebase";
-import { subscribeToUserPredictions } from "@/lib/predictions";
 import type { PredictionRecord } from "@/lib/prediction-types";
+import { useAppData } from "@/providers/AppDataProvider";
 import { useAuth } from "@/providers/AuthProvider";
 
 type TransactionRecord = {
@@ -66,6 +67,7 @@ function getTimestampValue(value: unknown) {
 
 export default function TransactionsScreen() {
   const { user, profile } = useAuth();
+  const { userPredictions } = useAppData();
   const { width } = useWindowDimensions();
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [predictions, setPredictions] = useState<Record<string, PredictionRecord>>({});
@@ -74,60 +76,59 @@ export default function TransactionsScreen() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isCompact = width < 720;
 
-  useEffect(() => {
-    if (!user) {
-      setTransactions([]);
-      setPredictions({});
-      setIsLoading(false);
-      return;
-    }
-
-    const transactionsQuery = query(collection(db, "transactions"), where("userId", "==", user.uid));
-
-    const unsubscribe = onSnapshot(
-      transactionsQuery,
-      (snapshot) => {
-        const nextTransactions = snapshot.docs
-          .map((entry) => ({
-            id: entry.id,
-            ...(entry.data() as Omit<TransactionRecord, "id">),
-          }))
-          .sort(
-            (left, right) =>
-              getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt)
-          );
-
-        setTransactions(nextTransactions);
-        setError(null);
-        setIsLoading(false);
-      },
-      (snapshotError) => {
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) {
         setTransactions([]);
-        setError(`Transactions read failed: ${snapshotError.message}`);
+        setPredictions({});
         setIsLoading(false);
+        return () => {};
       }
-    );
 
-    return unsubscribe;
-  }, [user]);
+      setIsLoading(true);
+      const transactionsQuery = query(collection(db, "transactions"), where("userId", "==", user.uid));
+
+      const unsubscribe = onSnapshot(
+        transactionsQuery,
+        (snapshot) => {
+          const nextTransactions = snapshot.docs
+            .map((entry) => ({
+              id: entry.id,
+              ...(entry.data() as Omit<TransactionRecord, "id">),
+            }))
+            .sort(
+              (left, right) =>
+                getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt)
+            );
+
+          setTransactions(nextTransactions);
+          setError(null);
+          setIsLoading(false);
+        },
+        (snapshotError) => {
+          setTransactions([]);
+          setError(`Transactions read failed: ${snapshotError.message}`);
+          setIsLoading(false);
+        }
+      );
+
+      return unsubscribe;
+    }, [user])
+  );
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !userPredictions.length) {
       setPredictions({});
       return;
     }
 
-    const unsubscribe = subscribeToUserPredictions(user.uid, (nextPredictions) => {
-      setPredictions(
-        nextPredictions.reduce<Record<string, PredictionRecord>>((accumulator, prediction) => {
-          accumulator[prediction.matchId] = prediction;
-          return accumulator;
-        }, {})
-      );
-    });
-
-    return unsubscribe;
-  }, [user]);
+    setPredictions(
+      userPredictions.reduce<Record<string, PredictionRecord>>((accumulator, prediction) => {
+        accumulator[prediction.matchId] = prediction;
+        return accumulator;
+      }, {})
+    );
+  }, [user, userPredictions]);
 
   const totals = useMemo(
     () => ({
