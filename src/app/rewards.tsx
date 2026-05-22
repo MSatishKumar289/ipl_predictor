@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,14 +9,16 @@ import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { BackButton } from "@/components/BackButton";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import {
+  getAllRewards,
+  getWeeklySpinHistory,
   getTimestampValue,
-  subscribeToAllRewards,
-  subscribeToWeeklySpinHistory,
 } from "@/lib/spin";
 import type { UserRewardRecord, WeeklySpinResultRecord } from "@/lib/spin-types";
 import { useAuth } from "@/providers/AuthProvider";
 
 type RewardsTab = "available" | "used" | "history";
+const HISTORY_REFRESH_LOCK_MS = 60 * 60 * 1000;
+const HISTORY_REFRESH_KEY = "policy:rewards_history_refresh:v1";
 
 export default function RewardsScreen() {
   const { user } = useAuth();
@@ -24,6 +27,8 @@ export default function RewardsScreen() {
   const [rewards, setRewards] = useState<UserRewardRecord[]>([]);
   const [spinHistory, setSpinHistory] = useState<WeeklySpinResultRecord[]>([]);
   const [activeTab, setActiveTab] = useState<RewardsTab>("available");
+  const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
+  const [historyRefreshLockedUntilMs, setHistoryRefreshLockedUntilMs] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,21 +40,57 @@ export default function RewardsScreen() {
       }
 
       setIsLoading(true);
-
-      const unsubscribeRewards = subscribeToAllRewards(user.uid, (nextRewards) => {
-        setRewards(nextRewards);
-        setIsLoading(false);
-      });
-      const unsubscribeHistory = subscribeToWeeklySpinHistory(user.uid, (nextHistory) => {
-        setSpinHistory(nextHistory);
-        setIsLoading(false);
-      });
+      let isActive = true;
+      void (async () => {
+        try {
+          const [nextRewards, nextHistory, refreshLockRaw] = await Promise.all([
+            getAllRewards(user.uid),
+            getWeeklySpinHistory(user.uid),
+            AsyncStorage.getItem(HISTORY_REFRESH_KEY),
+          ]);
+          if (!isActive) {
+            return;
+          }
+          setRewards(nextRewards);
+          setSpinHistory(nextHistory);
+          const lockMs = refreshLockRaw ? Number(refreshLockRaw) : 0;
+          setHistoryRefreshLockedUntilMs(Number.isFinite(lockMs) ? lockMs : 0);
+        } finally {
+          if (isActive) {
+            setIsLoading(false);
+          }
+        }
+      })();
 
       return () => {
-        unsubscribeRewards();
-        unsubscribeHistory();
+        isActive = false;
       };
     }, [user])
+  );
+
+  const refreshHistory = useCallback(() => {
+    if (!user) {
+      return;
+    }
+    const nowMs = Date.now();
+    if (historyRefreshLockedUntilMs > nowMs) {
+      return;
+    }
+    setIsHistoryRefreshing(true);
+    void getWeeklySpinHistory(user.uid)
+      .then(async (nextHistory) => {
+        setSpinHistory(nextHistory);
+        const nextLockedUntil = Date.now() + HISTORY_REFRESH_LOCK_MS;
+        setHistoryRefreshLockedUntilMs(nextLockedUntil);
+        await AsyncStorage.setItem(HISTORY_REFRESH_KEY, String(nextLockedUntil));
+      })
+      .finally(() => {
+        setIsHistoryRefreshing(false);
+      });
+  }, [historyRefreshLockedUntilMs, user]);
+  const historyCooldownMinutes = Math.max(
+    0,
+    Math.ceil((historyRefreshLockedUntilMs - Date.now()) / 60000)
   );
 
   const activeRewards = useMemo(() => {
@@ -190,6 +231,23 @@ export default function RewardsScreen() {
               statusHeader={tabMeta.statusHeader}
               emptyText={tabMeta.emptyText}
             />
+            {activeTab === "history" ? (
+              <View style={styles.historyRefreshWrap}>
+                <Text
+                  onPress={refreshHistory}
+                  style={[
+                    styles.historyRefreshButton,
+                    (isHistoryRefreshing || historyCooldownMinutes > 0) && styles.historyRefreshButtonDisabled,
+                  ]}
+                >
+                  {isHistoryRefreshing
+                    ? "Refreshing..."
+                    : historyCooldownMinutes > 0
+                      ? `Refresh in ${historyCooldownMinutes}m`
+                      : "Refresh History"}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </ScrollView>
@@ -380,6 +438,25 @@ const styles = StyleSheet.create({
   },
   tabButtonTextActive: {
     color: "#F7D88D",
+  },
+  historyRefreshWrap: {
+    alignItems: "flex-start",
+  },
+  historyRefreshButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F2B84B",
+    backgroundColor: "#3A2E0D",
+    color: "#F7D88D",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  historyRefreshButtonDisabled: {
+    opacity: 0.7,
   },
   tableWrap: {
     borderRadius: 18,
