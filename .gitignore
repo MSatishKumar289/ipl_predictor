@@ -37,6 +37,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+data/points-revert-*.json
+
+
 .sfdx/
 
 app-example
