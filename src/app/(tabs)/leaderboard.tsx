@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -14,22 +15,35 @@ import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
-import { subscribeToLeaderboardUsers } from "@/lib/auth";
+import { getLeaderboardUsersSnapshot } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
 import {
+  getRecentSpinResults,
+  getWeeklySpinCampaigns,
+  getWeeklySpinConfig,
   getTimestampValue,
-  subscribeToRecentSpinResults,
-  subscribeToWeeklySpinCampaigns,
-  subscribeToWeeklySpinConfig,
 } from "@/lib/spin";
 import type {
   WeeklySpinCampaignRecord,
   WeeklySpinConfig,
   WeeklySpinResultRecord,
 } from "@/lib/spin-types";
+import { markReadRan, shouldRunRead } from "@/lib/read-policy";
 import { useAuth } from "@/providers/AuthProvider";
+import { useFocusEffect } from "expo-router";
 
 type LeaderboardViewTab = "leaderboard" | "unlisted_users" | "spin_winners";
+const LEADERBOARD_CACHE_KEY = "cache:leaderboard_tab:v1";
+const LEADERBOARD_READ_POLICY_KEY = "policy:leaderboard_tab:v1";
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+type CachedLeaderboardPayload = {
+  listedUsers: UserProfileRecord[];
+  unlistedUsers: UserProfileRecord[];
+  spinResults: WeeklySpinResultRecord[];
+  spinCampaigns: WeeklySpinCampaignRecord[];
+  spinConfig: WeeklySpinConfig | null;
+};
 
 export default function LeaderboardTab() {
   const { user } = useAuth();
@@ -47,66 +61,123 @@ export default function LeaderboardTab() {
   const [activeTab, setActiveTab] = useState<LeaderboardViewTab>("leaderboard");
   const [spinCampaigns, setSpinCampaigns] = useState<WeeklySpinCampaignRecord[]>([]);
   const [spinConfig, setSpinConfig] = useState<WeeklySpinConfig | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToLeaderboardUsers(
-      ({ listedUsers: nextListedUsers, unlistedUsers: nextUnlistedUsers }) => {
-        setListedUsers(nextListedUsers);
-        setUnlistedUsers(nextUnlistedUsers);
-        setError(null);
-        setIsLoading(false);
-      },
-      (snapshotError) => {
-        setListedUsers([]);
-        setUnlistedUsers([]);
-        setError(`Leaderboard read failed: ${snapshotError.message}`);
-        setIsLoading(false);
-      }
-    );
-
-    return unsubscribe;
+  const applyPayload = useCallback((payload: CachedLeaderboardPayload) => {
+    setListedUsers(payload.listedUsers);
+    setUnlistedUsers(payload.unlistedUsers);
+    setSpinResults(payload.spinResults);
+    setSpinCampaigns(payload.spinCampaigns);
+    setSpinConfig(payload.spinConfig);
+    setError(null);
+    setSpinError(null);
+    setIsLoading(false);
+    setIsSpinLoading(false);
   }, []);
 
+  const fetchLeaderboardData = useCallback(
+    async (force = false) => {
+      if (!force) {
+        const allowed = await shouldRunRead({
+          key: LEADERBOARD_READ_POLICY_KEY,
+          minIntervalMs: ONE_HOUR_MS,
+          activeHours: {
+            startHourInclusive: 9,
+            endHourInclusive: 23,
+          },
+        });
+        if (!allowed) {
+          return;
+        }
+      }
+
+      const [leaderboardPayload, nextSpinResults, nextSpinCampaigns, nextSpinConfig] =
+        await Promise.all([
+          getLeaderboardUsersSnapshot(),
+          getRecentSpinResults(),
+          getWeeklySpinCampaigns(),
+          getWeeklySpinConfig(),
+        ]);
+
+      const payload: CachedLeaderboardPayload = {
+        listedUsers: leaderboardPayload.listedUsers,
+        unlistedUsers: leaderboardPayload.unlistedUsers,
+        spinResults: nextSpinResults,
+        spinCampaigns: nextSpinCampaigns,
+        spinConfig: nextSpinConfig,
+      };
+
+      applyPayload(payload);
+      await AsyncStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify(payload));
+      await markReadRan(LEADERBOARD_READ_POLICY_KEY);
+    },
+    [applyPayload]
+  );
+
   useEffect(() => {
-    const unsubscribeConfig = subscribeToWeeklySpinConfig(
-      (nextConfig) => {
-        setSpinConfig(nextConfig);
-      },
-      () => {
-        setSpinConfig(null);
-      }
-    );
-    const unsubscribeCampaigns = subscribeToWeeklySpinCampaigns(
-      (nextCampaigns) => {
-        setSpinCampaigns(nextCampaigns);
-      },
-      () => {
-        setSpinCampaigns([]);
-      }
-    );
+    let isMounted = true;
+    void AsyncStorage.getItem(LEADERBOARD_CACHE_KEY)
+      .then((raw) => {
+        if (!isMounted || !raw) {
+          return;
+        }
+        const parsed = JSON.parse(raw) as CachedLeaderboardPayload;
+        applyPayload(parsed);
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+        setIsLoading(true);
+        setIsSpinLoading(true);
+      });
 
     return () => {
-      unsubscribeConfig();
-      unsubscribeCampaigns();
+      isMounted = false;
     };
-  }, []);
+  }, [applyPayload]);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToRecentSpinResults(
-      (nextResults) => {
-        setSpinResults(nextResults);
-        setSpinError(null);
-        setIsSpinLoading(false);
-      },
-      (snapshotError) => {
-        setSpinResults([]);
-        setSpinError(`Spin winners read failed: ${snapshotError.message}`);
-        setIsSpinLoading(false);
-      }
-    );
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      setIsRefreshing(true);
+      void fetchLeaderboardData(false)
+        .catch((snapshotError: unknown) => {
+          if (!isActive) {
+            return;
+          }
+          const message =
+            snapshotError instanceof Error ? snapshotError.message : "Unknown leaderboard error";
+          setError(`Leaderboard read failed: ${message}`);
+          setSpinError(`Spin winners read failed: ${message}`);
+          setIsLoading(false);
+          setIsSpinLoading(false);
+        })
+        .finally(() => {
+          if (isActive) {
+            setIsRefreshing(false);
+          }
+        });
 
-    return unsubscribe;
-  }, []);
+      return () => {
+        isActive = false;
+      };
+    }, [fetchLeaderboardData])
+  );
+
+  const handleManualRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    void fetchLeaderboardData(true)
+      .catch((snapshotError: unknown) => {
+        const message =
+          snapshotError instanceof Error ? snapshotError.message : "Unknown leaderboard error";
+        setError(`Leaderboard read failed: ${message}`);
+        setSpinError(`Spin winners read failed: ${message}`);
+      })
+      .finally(() => {
+        setIsRefreshing(false);
+      });
+  }, [fetchLeaderboardData]);
 
   const isDesktop = width >= 1024;
 
@@ -294,6 +365,15 @@ export default function LeaderboardTab() {
                 onPress={() => setActiveTab("spin_winners")}
               />
             </View>
+            <Pressable
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]}
+              onPress={handleManualRefresh}
+              disabled={isRefreshing}
+            >
+              <Text style={styles.refreshButtonText}>
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </Text>
+            </Pressable>
             <View style={styles.tabsDivider} />
           </View>
 
@@ -580,6 +660,25 @@ const styles = StyleSheet.create({
   },
   tabsWrap: {
     gap: 8,
+  },
+  refreshButton: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#2F7FFF",
+    backgroundColor: "#143266",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  refreshButtonDisabled: {
+    opacity: 0.7,
+  },
+  refreshButtonText: {
+    color: "#CFE0FF",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
   tabBar: {
     flexDirection: "row",

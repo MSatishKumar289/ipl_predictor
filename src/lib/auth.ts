@@ -219,6 +219,115 @@ export function subscribeToLeaderboardUsers(
   }> = [];
 
   function emitLeaderboard() {
+    callback(
+      buildLeaderboardPayload({
+        users: latestUsers,
+        spinResults: latestSpinResults,
+        predictions: latestPredictions,
+        matches: latestMatches,
+        threshold: LEADERBOARD_PARTICIPATION_THRESHOLD,
+      })
+    );
+  }
+
+  const unsubscribeUsers = onSnapshot(
+    collection(db, "users"),
+    (snapshot) => {
+      latestUsers = snapshot.docs.map((userDoc) => ({
+        uid: userDoc.id,
+        ...(userDoc.data() as UserProfile),
+      }));
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  const unsubscribeSpinResults = onSnapshot(
+    collection(db, "weekly_spin_results"),
+    (snapshot) => {
+      latestSpinResults = snapshot.docs.map((entry) => entry.data() as {
+        userId?: string;
+        rewardKind?: string;
+        rewardValue?: number | null;
+        createdAt?: unknown;
+      });
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  const unsubscribePredictions = onSnapshot(
+    collection(db, "predictions"),
+    (snapshot) => {
+      latestPredictions = snapshot.docs.map((entry) => entry.data() as {
+        userId?: string;
+        status?: string;
+        matchId?: string;
+        amount?: number;
+        payout?: number;
+        settledAt?: unknown;
+      });
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  const unsubscribeMatches = onSnapshot(
+    collection(db, "matches"),
+    (snapshot) => {
+      latestMatches = snapshot.docs.map((entry) => ({
+        id: entry.id,
+        status: (entry.data() as { status?: string }).status,
+      }));
+      emitLeaderboard();
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  return () => {
+    unsubscribeUsers();
+    unsubscribeSpinResults();
+    unsubscribePredictions();
+    unsubscribeMatches();
+  };
+}
+
+function buildLeaderboardPayload({
+  users: latestUsers,
+  spinResults: latestSpinResults,
+  predictions: latestPredictions,
+  matches: latestMatches,
+  threshold,
+}: {
+  users: UserProfileRecord[];
+  spinResults: Array<{
+    userId?: string;
+    rewardKind?: string;
+    rewardValue?: number | null;
+    createdAt?: unknown;
+  }>;
+  predictions: Array<{
+    userId?: string;
+    status?: string;
+    matchId?: string;
+    amount?: number;
+    payout?: number;
+    settledAt?: unknown;
+  }>;
+  matches: Array<{
+    id: string;
+    status?: string;
+  }>;
+  threshold: number;
+}) {
     const completedMatchIdSet = new Set(
       latestMatches
         .filter((entry) =>
@@ -383,92 +492,64 @@ export function subscribeToLeaderboardUsers(
     const listedUsers = users
       .filter((user) => {
         const participationRate = participationByUser.get(user.uid)?.participationRate ?? 1;
-        return participationRate >= LEADERBOARD_PARTICIPATION_THRESHOLD;
+        return participationRate >= threshold;
       })
       .sort(sortByRank);
 
     const unlistedUsers = users
       .filter((user) => {
         const participationRate = participationByUser.get(user.uid)?.participationRate ?? 1;
-        return participationRate < LEADERBOARD_PARTICIPATION_THRESHOLD;
+        return participationRate < threshold;
       })
       .sort(sortByRank);
 
-    callback({
+    return {
       listedUsers,
       unlistedUsers,
       totalCompletedMatches,
-    });
-  }
-
-  const unsubscribeUsers = onSnapshot(
-    collection(db, "users"),
-    (snapshot) => {
-      latestUsers = snapshot.docs.map((userDoc) => ({
-        uid: userDoc.id,
-        ...(userDoc.data() as UserProfile),
-      }));
-      emitLeaderboard();
-    },
-    (error) => {
-      onError?.(error);
-    }
-  );
-
-  const unsubscribeSpinResults = onSnapshot(
-    collection(db, "weekly_spin_results"),
-    (snapshot) => {
-      latestSpinResults = snapshot.docs.map((entry) => entry.data() as {
-        userId?: string;
-        rewardKind?: string;
-        rewardValue?: number | null;
-        createdAt?: unknown;
-      });
-      emitLeaderboard();
-    },
-    (error) => {
-      onError?.(error);
-    }
-  );
-
-  const unsubscribePredictions = onSnapshot(
-    collection(db, "predictions"),
-    (snapshot) => {
-      latestPredictions = snapshot.docs.map((entry) => entry.data() as {
-        userId?: string;
-        status?: string;
-        matchId?: string;
-        amount?: number;
-        payout?: number;
-        settledAt?: unknown;
-      });
-      emitLeaderboard();
-    },
-    (error) => {
-      onError?.(error);
-    }
-  );
-
-  const unsubscribeMatches = onSnapshot(
-    collection(db, "matches"),
-    (snapshot) => {
-      latestMatches = snapshot.docs.map((entry) => ({
-        id: entry.id,
-        status: (entry.data() as { status?: string }).status,
-      }));
-      emitLeaderboard();
-    },
-    (error) => {
-      onError?.(error);
-    }
-  );
-
-  return () => {
-    unsubscribeUsers();
-    unsubscribeSpinResults();
-    unsubscribePredictions();
-    unsubscribeMatches();
   };
+}
+
+export async function getLeaderboardUsersSnapshot() {
+  const { db } = getFirebaseServices();
+  const LEADERBOARD_PARTICIPATION_THRESHOLD = 0.35;
+  const [usersSnapshot, spinResultsSnapshot, predictionsSnapshot, matchesSnapshot] = await Promise.all([
+    getDocs(collection(db, "users")),
+    getDocs(collection(db, "weekly_spin_results")),
+    getDocs(collection(db, "predictions")),
+    getDocs(collection(db, "matches")),
+  ]);
+
+  const users = usersSnapshot.docs.map((userDoc) => ({
+    uid: userDoc.id,
+    ...(userDoc.data() as UserProfile),
+  }));
+  const spinResults = spinResultsSnapshot.docs.map((entry) => entry.data() as {
+    userId?: string;
+    rewardKind?: string;
+    rewardValue?: number | null;
+    createdAt?: unknown;
+  });
+  const predictions = predictionsSnapshot.docs.map((entry) => entry.data() as {
+    userId?: string;
+    status?: string;
+    matchId?: string;
+    amount?: number;
+    payout?: number;
+    settledAt?: unknown;
+  });
+  const matches = matchesSnapshot.docs.map((entry) => ({
+    id: entry.id,
+    status: (entry.data() as { status?: string }).status,
+  }));
+
+  return buildLeaderboardPayload({
+    users,
+    spinResults,
+    predictions,
+    matches,
+    threshold: LEADERBOARD_PARTICIPATION_THRESHOLD,
+  });
 }
 
 export function subscribeToAllUsers(

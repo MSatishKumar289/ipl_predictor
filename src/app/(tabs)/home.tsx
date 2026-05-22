@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   Pressable,
@@ -24,6 +25,7 @@ import {
   getWeeklySpinStatus,
   hasUserPlayedAnyWeeklySpin,
 } from "@/lib/spin";
+import { markReadRan, shouldRunRead } from "@/lib/read-policy";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAppData } from "@/providers/AppDataProvider";
 
@@ -35,6 +37,16 @@ const filters: { key: MatchFilter; label: string }[] = [
   { key: "live", label: "Live" },
   { key: "completed", label: "Completed" },
 ];
+const HOME_SPIN_CACHE_KEY = "cache:home_spin_status:v1";
+const HOME_SPIN_POLICY_KEY = "policy:home_spin_status:v1";
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+type CachedHomeSpinStatus = {
+  userId: string;
+  isSpinEligible: boolean;
+  hasUsedSpin: boolean;
+  nextSpinStartAt: string | null;
+};
 
 export default function HomeTab() {
   const { user, profile } = useAuth();
@@ -79,9 +91,42 @@ export default function HomeTab() {
       }
 
       setIsSpinLoading(true);
+      void (async () => {
+        try {
+          const cachedRaw = await AsyncStorage.getItem(HOME_SPIN_CACHE_KEY);
+          let cached: CachedHomeSpinStatus | null = null;
+          if (cachedRaw) {
+            try {
+              const parsed = JSON.parse(cachedRaw) as CachedHomeSpinStatus;
+              if (parsed.userId === user.uid) {
+                cached = parsed;
+              }
+            } catch {
+              cached = null;
+            }
+          }
 
-      void getWeeklySpinStatus(user.uid)
-        .then(async (status) => {
+          if (cached && isActive) {
+            setIsSpinEligible(cached.isSpinEligible);
+            setHasUsedSpin(cached.hasUsedSpin);
+            setNextSpinStartAt(cached.nextSpinStartAt);
+            setIsSpinLoading(false);
+          }
+
+          const allowed = await shouldRunRead({
+            key: HOME_SPIN_POLICY_KEY,
+            minIntervalMs: ONE_HOUR_MS,
+            activeHours: {
+              startHourInclusive: 9,
+              endHourInclusive: 23,
+            },
+          });
+
+          if (!allowed) {
+            return;
+          }
+
+          const status = await getWeeklySpinStatus(user.uid);
           if (!isActive) {
             return;
           }
@@ -93,6 +138,7 @@ export default function HomeTab() {
           }
           setHasUsedSpin(hasPlayedAnySpin);
 
+          let resolvedNextSpinStartAt: string | null = null;
           if (hasPlayedAnySpin) {
             const config = await getWeeklySpinConfig();
             if (!isActive) {
@@ -100,30 +146,35 @@ export default function HomeTab() {
             }
             const publishedStartAt = config.activeCampaignStartAt ?? null;
             const publishedStartAtMs = publishedStartAt ? Date.parse(publishedStartAt) : 0;
-            setNextSpinStartAt(
-              publishedStartAt && publishedStartAtMs > Date.now() ? publishedStartAt : null
-            );
-            return;
+            resolvedNextSpinStartAt =
+              publishedStartAt && publishedStartAtMs > Date.now() ? publishedStartAt : null;
           }
 
-          setNextSpinStartAt(null);
-        })
-        .catch(() => {
+          setNextSpinStartAt(resolvedNextSpinStartAt);
+          await AsyncStorage.setItem(
+            HOME_SPIN_CACHE_KEY,
+            JSON.stringify({
+              userId: user.uid,
+              isSpinEligible: status.eligible,
+              hasUsedSpin: hasPlayedAnySpin,
+              nextSpinStartAt: resolvedNextSpinStartAt,
+            } satisfies CachedHomeSpinStatus)
+          );
+          await markReadRan(HOME_SPIN_POLICY_KEY);
+        } catch {
           if (!isActive) {
             return;
           }
-
           setIsSpinEligible(false);
           setHasUsedSpin(false);
           setNextSpinStartAt(null);
-        })
-        .finally(() => {
+        } finally {
           if (!isActive) {
             return;
           }
-
           setIsSpinLoading(false);
-        });
+        }
+      })();
 
       return () => {
         isActive = false;
