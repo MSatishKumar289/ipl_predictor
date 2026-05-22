@@ -602,6 +602,29 @@ export function subscribeToWeeklySpinCampaigns(
   );
 }
 
+export async function getWeeklySpinCampaigns(limitCount = 100): Promise<WeeklySpinCampaignRecord[]> {
+  const snapshot = await getDocs(
+    query(WEEKLY_SPIN_CAMPAIGNS_COLLECTION, orderBy("campaignNumber", "desc"), limit(limitCount))
+  );
+  const referenceIso = nowIso();
+
+  return snapshot.docs.map((entry) => {
+    const normalized = normalizeWeeklySpinCampaign({
+      id: entry.id,
+      data: entry.data() as Omit<WeeklySpinCampaignRecord, "id">,
+    });
+
+    if (normalized.status === "cancelled") {
+      return normalized;
+    }
+
+    return {
+      ...normalized,
+      status: resolveCampaignStatus(normalized.startAt, normalized.endAt, referenceIso),
+    };
+  });
+}
+
 export async function spinWeeklyWheel(userId: string) {
   const status = await getWeeklySpinStatus(userId);
 
@@ -850,6 +873,16 @@ export function subscribeToAllRewards(
   );
 }
 
+export async function getAllRewards(userId: string): Promise<UserRewardRecord[]> {
+  const snapshot = await getDocs(query(collection(db, "user_rewards"), where("userId", "==", userId)));
+  return snapshot.docs.map((entry) =>
+    normalizeUserReward({
+      id: entry.id,
+      data: entry.data() as Omit<UserRewardRecord, "id">,
+    })
+  );
+}
+
 export function subscribeToWeeklySpinHistory(
   userId: string,
   callback: (results: WeeklySpinResultRecord[]) => void,
@@ -873,6 +906,18 @@ export function subscribeToWeeklySpinHistory(
       onError?.(error);
     }
   );
+}
+
+export async function getWeeklySpinHistory(userId: string): Promise<WeeklySpinResultRecord[]> {
+  const snapshot = await getDocs(query(collection(db, "weekly_spin_results"), where("userId", "==", userId)));
+  return snapshot.docs
+    .map((entry) =>
+      normalizeSpinResult({
+        id: entry.id,
+        data: entry.data() as Omit<WeeklySpinResultRecord, "id">,
+      })
+    )
+    .sort((left, right) => getTimestampValue(right.createdAt) - getTimestampValue(left.createdAt));
 }
 
 export async function hasUserPlayedAnyWeeklySpin(userId: string): Promise<boolean> {
@@ -902,6 +947,18 @@ export function subscribeToRecentSpinResults(
     (error) => {
       onError?.(error);
     }
+  );
+}
+
+export async function getRecentSpinResults(maxResults = 50): Promise<WeeklySpinResultRecord[]> {
+  const snapshot = await getDocs(
+    query(collection(db, "weekly_spin_results"), orderBy("createdAt", "desc"), limit(maxResults))
+  );
+  return snapshot.docs.map((entry) =>
+    normalizeSpinResult({
+      id: entry.id,
+      data: entry.data() as Omit<WeeklySpinResultRecord, "id">,
+    })
   );
 }
 
