@@ -24,12 +24,14 @@ import { CloseIcon } from "@/components/CloseIcon";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import {
   createMatch,
+  deleteMatchBeforeBettingOpens,
   formatMatchDate,
   revertMatchSettlement,
   settleMatchOutcome,
   subscribeToSettlementBackupAvailability,
   subscribeToMatches,
   type SettlementBackupAvailability,
+  updateMatchDetails,
   updateMatchSettings,
 } from "@/lib/matches";
 import { applyGlobalBonus, deleteUserRecords, subscribeToAllUsers } from "@/lib/auth";
@@ -89,6 +91,7 @@ export default function AdminScreen() {
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [pickerValue, setPickerValue] = useState(new Date());
   const [isEditableBeforeLock, setIsEditableBeforeLock] = useState(true);
+  const [winnerPoints, setWinnerPoints] = useState("3");
   const [pendingSettlement, setPendingSettlement] = useState<PendingSettlement>(null);
   const [isSettling, setIsSettling] = useState(false);
   const [pendingRevert, setPendingRevert] = useState<PendingRevert>(null);
@@ -118,6 +121,14 @@ export default function AdminScreen() {
   const [bonusReasonInput, setBonusReasonInput] = useState("");
   const [isApplyingBonus, setIsApplyingBonus] = useState(false);
   const [fallbackIssue, setFallbackIssue] = useState<FallbackIssue | null>(null);
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
+  const [expandedRecentMatchId, setExpandedRecentMatchId] = useState<string | null>(null);
+  const [editMatchNumber, setEditMatchNumber] = useState("");
+  const [editMatchDate, setEditMatchDate] = useState("");
+  const [editMatchTime, setEditMatchTime] = useState("");
+  const [editWinnerPoints, setEditWinnerPoints] = useState("3");
+  const [isSavingMatchDetails, setIsSavingMatchDetails] = useState(false);
+  const [isDeletingMatch, setIsDeletingMatch] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToMatches((nextMatches) => {
@@ -228,6 +239,16 @@ export default function AdminScreen() {
   const visibleMatches = activeMatchView === "live" ? liveMatches : resultMatches;
   const selectedTeamA = useMemo(() => getIplTeamById(teamAId), [teamAId]);
   const selectedTeamB = useMemo(() => getIplTeamById(teamBId), [teamBId]);
+  const recentCreatedMatches = useMemo(() => {
+    return matches
+      .filter((entry) => entry.createdBy === user?.uid)
+      .sort((left, right) => {
+        const leftTime = getComparableTime(left.createdAt) || Date.parse(left.startAt);
+        const rightTime = getComparableTime(right.createdAt) || Date.parse(right.startAt);
+        return rightTime - leftTime;
+      })
+      .slice(0, 5);
+  }, [matches, user?.uid]);
   const isDesktop = width >= 1024;
 
   if (isAuthLoading) {
@@ -272,7 +293,8 @@ export default function AdminScreen() {
       !selectedTeamA ||
       !selectedTeamB ||
       !matchDate.trim() ||
-      !matchTime.trim()
+      !matchTime.trim() ||
+      !winnerPoints.trim()
     ) {
       const message = "Fill in all match fields before creating the fixture.";
       setCreateMatchError(message);
@@ -288,10 +310,17 @@ export default function AdminScreen() {
     }
 
     const startAt = new Date(`${matchDate}T${matchTime}:00+05:30`);
+    const nextWinnerPoints = Number(winnerPoints.trim());
     if (Number.isNaN(startAt.getTime())) {
       const message = "Use YYYY-MM-DD for date and HH:MM in 24-hour format.";
       setCreateMatchError(message);
       Alert.alert("Invalid date", message);
+      return;
+    }
+    if (!Number.isFinite(nextWinnerPoints) || nextWinnerPoints < 0) {
+      const message = "Winner points must be a valid non-negative number.";
+      setCreateMatchError(message);
+      Alert.alert("Invalid winner points", message);
       return;
     }
 
@@ -307,6 +336,7 @@ export default function AdminScreen() {
           teamBShort: selectedTeamB.shortCode,
           startAt: startAt.toISOString(),
           isEditableBeforeLock,
+          winnerPoints: Math.floor(nextWinnerPoints),
         },
         adminUserId
       );
@@ -316,6 +346,7 @@ export default function AdminScreen() {
       setTeamBId(null);
       setMatchDate("");
       setMatchTime("");
+      setWinnerPoints("3");
       setIsEditableBeforeLock(true);
       setCreateMatchSuccess("Match created successfully. The fixture is now live.");
       Alert.alert("Match created", "The fixture is now live in the matches list.");
@@ -330,6 +361,131 @@ export default function AdminScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function beginEditMatch(match: MatchRecord) {
+    const start = new Date(match.startAt);
+    setEditingMatchId(match.id);
+    setEditMatchNumber(String(match.matchNumber));
+    setEditMatchDate(formatDateValue(start));
+    setEditMatchTime(formatTimeValue(start));
+    setEditWinnerPoints(String(match.winnerPoints ?? 3));
+  }
+
+  function openRecentMatchActions(match: MatchRecord) {
+    if (expandedRecentMatchId === match.id) {
+      setExpandedRecentMatchId(null);
+      if (editingMatchId === match.id) {
+        setEditingMatchId(null);
+      }
+      return;
+    }
+
+    setExpandedRecentMatchId(match.id);
+    if (editingMatchId !== match.id) {
+      setEditingMatchId(null);
+    }
+  }
+
+  async function handleSaveMatchDetails(match: MatchRecord) {
+    if (isSavingMatchDetails) {
+      return;
+    }
+    if (
+      match.status === "settled" ||
+      match.status === "completed" ||
+      match.status === "no_result"
+    ) {
+      Alert.alert("Edit blocked", "Settled/completed matches cannot be edited.");
+      return;
+    }
+
+    const matchNumberValue = Number(editMatchNumber.trim());
+    const winnerPointsValue = Number(editWinnerPoints.trim());
+    const startAt = new Date(`${editMatchDate}T${editMatchTime}:00+05:30`);
+
+    if (!editMatchNumber.trim() || !editMatchDate.trim() || !editMatchTime.trim()) {
+      Alert.alert("Missing details", "Fill match number, date, and time.");
+      return;
+    }
+
+    if (!Number.isFinite(matchNumberValue) || matchNumberValue <= 0) {
+      Alert.alert("Invalid match number", "Match number must be a valid positive number.");
+      return;
+    }
+
+    if (!Number.isFinite(winnerPointsValue) || winnerPointsValue < 0) {
+      Alert.alert("Invalid winner points", "Winner points must be a valid non-negative number.");
+      return;
+    }
+
+    if (Number.isNaN(startAt.getTime())) {
+      Alert.alert("Invalid date", "Use a valid date and time.");
+      return;
+    }
+
+    try {
+      setIsSavingMatchDetails(true);
+      await updateMatchDetails(match.id, {
+        matchNumber: Math.floor(matchNumberValue),
+        teamAName: match.teamAName,
+        teamBName: match.teamBName,
+        teamAShort: match.teamAShort,
+        teamBShort: match.teamBShort,
+        startAt: startAt.toISOString(),
+        winnerPoints: Math.floor(winnerPointsValue),
+      });
+      setEditingMatchId(null);
+      Alert.alert("Updated", "Match details were updated.");
+    } catch (error) {
+      const fallback = resolveFallbackIssue(error);
+      if (fallback) {
+        setFallbackIssue(fallback);
+      }
+      const message = error instanceof Error ? error.message : "Unable to update match details.";
+      Alert.alert("Update failed", message);
+    } finally {
+      setIsSavingMatchDetails(false);
+    }
+  }
+
+  async function handleDeleteMatch(match: MatchRecord) {
+    if (isDeletingMatch) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete match",
+      `Delete Match ${match.matchNumber}: ${match.teamAShort} vs ${match.teamBShort}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              try {
+                setIsDeletingMatch(true);
+                await deleteMatchBeforeBettingOpens(match.id);
+                if (editingMatchId === match.id) {
+                  setEditingMatchId(null);
+                }
+                Alert.alert("Deleted", "Match removed successfully.");
+              } catch (error) {
+                const fallback = resolveFallbackIssue(error);
+                if (fallback) {
+                  setFallbackIssue(fallback);
+                }
+                const message = error instanceof Error ? error.message : "Unable to delete match.";
+                Alert.alert("Delete failed", message);
+              } finally {
+                setIsDeletingMatch(false);
+              }
+            })();
+          },
+        },
+      ]
+    );
   }
 
   function handleSetOutcome(match: MatchRecord, winner: "teamA" | "teamB" | "no_result") {
@@ -1037,6 +1193,14 @@ export default function AdminScreen() {
                       </Pressable>
                     </>
                   )}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Winner points (default 3)"
+                    placeholderTextColor="#4C5D7C"
+                    keyboardType="number-pad"
+                    value={winnerPoints}
+                    onChangeText={(value) => setWinnerPoints(value.replace(/[^0-9]/g, ""))}
+                  />
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleTextWrap}>
@@ -1062,6 +1226,105 @@ export default function AdminScreen() {
                       {isSubmitting ? "Creating..." : "Create Match"}
                     </Text>
                   </Pressable>
+                  <View style={styles.recentMatchesWrap}>
+                    <Text style={styles.selectionSummaryTitle}>Recently Added By You</Text>
+                    {recentCreatedMatches.length ? (
+                      recentCreatedMatches.map((match) => (
+                        <View key={match.id} style={styles.recentMatchRow}>
+                          <Pressable onPress={() => openRecentMatchActions(match)}>
+                            <Text style={styles.recentMatchPrimary}>
+                              Match {match.matchNumber}: {match.teamAShort} vs {match.teamBShort}
+                            </Text>
+                            <Text style={styles.recentMatchMeta}>
+                              {formatMatchDate(match.startAt)} | Winner points: {match.winnerPoints ?? 3}
+                            </Text>
+                            <Text style={styles.recentMatchHint}>
+                              {expandedRecentMatchId === match.id ? "Tap again to close" : "Tap for actions"}
+                            </Text>
+                          </Pressable>
+                          {expandedRecentMatchId === match.id ? (
+                            <View style={styles.recentActionWrap}>
+                              <View style={styles.recentActionRow}>
+                                <Pressable
+                                  style={[
+                                    styles.recentEditButton,
+                                    styles.recentActionButton,
+                                    editingMatchId === match.id && styles.saveButton,
+                                    isSavingMatchDetails && styles.buttonDisabled,
+                                  ]}
+                                  onPress={() => {
+                                    if (editingMatchId === match.id) {
+                                      void handleSaveMatchDetails(match);
+                                      return;
+                                    }
+                                    beginEditMatch(match);
+                                  }}
+                                  disabled={isSavingMatchDetails}
+                                >
+                                  <Text style={styles.secondaryButtonText}>
+                                    {editingMatchId === match.id
+                                      ? isSavingMatchDetails
+                                        ? "Saving..."
+                                        : "Save"
+                                      : "Edit"}
+                                  </Text>
+                                </Pressable>
+                                <Pressable
+                                  style={[
+                                    styles.recentDeleteButton,
+                                    styles.recentActionButton,
+                                    isDeletingMatch && styles.buttonDisabled,
+                                  ]}
+                                  onPress={() => void handleDeleteMatch(match)}
+                                  disabled={isDeletingMatch}
+                                >
+                                  <Text style={styles.deleteButtonText}>
+                                    {isDeletingMatch ? "Deleting..." : "Delete"}
+                                  </Text>
+                                </Pressable>
+                              </View>
+                              {editingMatchId === match.id ? (
+                                <View style={[styles.editPanel, styles.editPanelActive]}>
+                                  <TextInput
+                                    style={styles.input}
+                                    placeholder="Match number"
+                                    placeholderTextColor="#4C5D7C"
+                                    keyboardType="number-pad"
+                                    value={editMatchNumber}
+                                    onChangeText={(value) => setEditMatchNumber(value.replace(/[^0-9]/g, ""))}
+                                  />
+                                  <TextInput
+                                    style={styles.input}
+                                    placeholder="YYYY-MM-DD"
+                                    placeholderTextColor="#4C5D7C"
+                                    value={editMatchDate}
+                                    onChangeText={setEditMatchDate}
+                                  />
+                                  <TextInput
+                                    style={styles.input}
+                                    placeholder="HH:MM"
+                                    placeholderTextColor="#4C5D7C"
+                                    value={editMatchTime}
+                                    onChangeText={setEditMatchTime}
+                                  />
+                                  <TextInput
+                                    style={styles.input}
+                                    placeholder="Winner points"
+                                    placeholderTextColor="#4C5D7C"
+                                    keyboardType="number-pad"
+                                    value={editWinnerPoints}
+                                    onChangeText={(value) => setEditWinnerPoints(value.replace(/[^0-9]/g, ""))}
+                                  />
+                                </View>
+                              ) : null}
+                            </View>
+                          ) : null}
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>No matches created by you yet.</Text>
+                    )}
+                  </View>
                 </View>
             ) : activeSection === "manage_match" ? (
               <View style={[styles.card, isDesktop && styles.cardDesktop]}>
@@ -1100,10 +1363,10 @@ export default function AdminScreen() {
                               Match {match.matchNumber}: {match.teamAShort} vs {match.teamBShort}
                             </Text>
                             <Text style={styles.matchMeta}>
-                              {formatMatchDate(match.startAt)} | Winner: {formatWinner(match)}
+                              {formatMatchDate(match.startAt)} | Winner: {formatWinner(match)} | Points:{" "}
+                              {match.winnerPoints ?? 3}
                             </Text>
                           </View>
-
                           <View style={styles.toggleRow}>
                             <View style={styles.toggleTextWrap}>
                               <Text style={styles.toggleTitle}>Allow edits before lock</Text>
@@ -1696,6 +1959,37 @@ function formatWinner(match: MatchRecord) {
   return "Yet to start";
 }
 
+function getComparableTime(value: unknown) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "toMillis" in value &&
+    typeof value.toMillis === "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    typeof value === "object" &&
+    value &&
+    "seconds" in value &&
+    typeof value.seconds === "number"
+  ) {
+    return value.seconds * 1000;
+  }
+
+  return 0;
+}
+
 function TeamOptionCard({
   team,
   isSelected,
@@ -1897,6 +2191,88 @@ const styles = StyleSheet.create({
     backgroundColor: "#0E1B36",
     padding: 16,
     gap: 6,
+  },
+  recentMatchesWrap: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    padding: 14,
+    gap: 8,
+  },
+  recentMatchRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#12274D",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  recentMatchPrimary: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  recentMatchMeta: {
+    color: "#9FB0CF",
+    fontSize: 12,
+  },
+  recentMatchHint: {
+    color: "#7FA2D7",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  recentActionWrap: {
+    marginTop: 10,
+    gap: 10,
+  },
+  recentActionRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  editPanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#223A63",
+    backgroundColor: "#0E1B36",
+    padding: 12,
+    gap: 10,
+  },
+  editPanelActive: {
+    backgroundColor: "#163A2E",
+    borderColor: "#2D8A65",
+  },
+  saveButton: {
+    backgroundColor: "#1E8E5A",
+    borderColor: "#32A773",
+  },
+  recentActionButton: {
+    width: "48%",
+    minWidth: "48%",
+    height: 50,
+    marginTop: 0,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 12,
+  },
+  recentEditButton: {
+    borderWidth: 1,
+    borderColor: "#2B65E8",
+    backgroundColor: "#1E5AE0",
+  },
+  recentDeleteButton: {
+    borderWidth: 1,
+    borderColor: "#8C2F2F",
+    backgroundColor: "#6E2626",
+  },
+  deleteButtonText: {
+    color: "#F7FAFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
   weeklySpinFlatSection: {
     gap: 10,
