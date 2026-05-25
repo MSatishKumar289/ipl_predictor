@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppMenuButton, AppMenuSheet } from "@/components/AppMenuSheet";
 import { AppScreenBackground } from "@/components/AppScreenBackground";
 import { CoinAmount } from "@/components/CoinAmount";
+import { CrownIcon } from "@/components/CrownIcon";
 import { StickyHeaderBar } from "@/components/StickyHeaderBar";
 import { getLeaderboardUsersSnapshot } from "@/lib/auth";
 import type { UserProfileRecord } from "@/lib/auth-types";
@@ -194,6 +195,8 @@ export default function LeaderboardTab() {
       })),
     [activeUsers]
   );
+  const topThreeUsers = useMemo(() => rankedUsers.slice(0, 3), [rankedUsers]);
+  const remainingRankedUsers = useMemo(() => rankedUsers.slice(3), [rankedUsers]);
 
   const userNameById = useMemo(
     () =>
@@ -323,7 +326,20 @@ export default function LeaderboardTab() {
       <View style={styles.topBannerWrap}>
         <StickyHeaderBar
           title="Leaderboard"
-          rightSlot={<AppMenuButton onPress={() => setIsMenuOpen(true)} />}
+          rightSlot={
+            <View style={styles.headerActions}>
+              <Pressable
+                style={[styles.headerRefreshButton, isRefreshing && styles.refreshButtonDisabled]}
+                onPress={handleManualRefresh}
+                disabled={isRefreshing}
+              >
+                <Text style={styles.headerRefreshButtonText}>
+                  {isRefreshing ? "..." : "Refresh"}
+                </Text>
+              </Pressable>
+              <AppMenuButton onPress={() => setIsMenuOpen(true)} />
+            </View>
+          }
           centered={isDesktop}
           edgeToEdge
         />
@@ -365,20 +381,30 @@ export default function LeaderboardTab() {
                 onPress={() => setActiveTab("spin_winners")}
               />
             </View>
-            <Pressable
-              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]}
-              onPress={handleManualRefresh}
-              disabled={isRefreshing}
-            >
-              <Text style={styles.refreshButtonText}>
-                {isRefreshing ? "Refreshing..." : "Refresh"}
-              </Text>
-            </Pressable>
-            <View style={styles.tabsDivider} />
           </View>
 
           {activeTab === "leaderboard" || activeTab === "unlisted_users" ? (
             rankedUsers.length ? (
+            <>
+            {activeTab === "leaderboard" ? (
+              <View style={styles.podiumRow}>
+                {topThreeUsers[1] ? (
+                  <TopPerformerCard entry={topThreeUsers[1]} variant="second" />
+                ) : (
+                  <View style={styles.podiumSpacer} />
+                )}
+                {topThreeUsers[0] ? (
+                  <TopPerformerCard entry={topThreeUsers[0]} variant="first" />
+                ) : (
+                  <View style={styles.podiumSpacer} />
+                )}
+                {topThreeUsers[2] ? (
+                  <TopPerformerCard entry={topThreeUsers[2]} variant="third" />
+                ) : (
+                  <View style={styles.podiumSpacer} />
+                )}
+              </View>
+            ) : null}
             <View style={styles.tableCard}>
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableHeaderText, styles.rankCol]}>#</Text>
@@ -400,7 +426,7 @@ export default function LeaderboardTab() {
                 ) : null}
                 <Text style={[styles.tableHeaderText, styles.balanceCol]}>Pocket</Text>
               </View>
-              {rankedUsers.map((entry) => {
+              {(activeTab === "leaderboard" ? remainingRankedUsers : rankedUsers).map((entry) => {
                 const isCurrentUser = user?.uid === entry.uid;
                 const isExpanded = expandedUserId === entry.uid;
 
@@ -502,6 +528,7 @@ export default function LeaderboardTab() {
                 );
               })}
             </View>
+            </>
             ) : (
             <View style={styles.tableCard}>
               <Text style={styles.listTitle}>
@@ -618,6 +645,89 @@ function LeaderboardTabButton({
   );
 }
 
+function TopPerformerCard({
+  entry,
+  variant,
+}: {
+  entry: UserProfileRecord & { rank: number };
+  variant: "first" | "second" | "third";
+}) {
+  const isFirst = variant === "first";
+  const isSecond = variant === "second";
+  const isThird = variant === "third";
+  const rankColor =
+    variant === "first" ? "#F6BE2C" : variant === "second" ? "#5BB6FF" : "#23D38A";
+
+  return (
+    <View
+      style={[
+        styles.topCardWrap,
+        isSecond && styles.topCardWrapSecond,
+        isFirst && styles.topCardWrapCenter,
+        isThird && styles.topCardWrapThird,
+      ]}
+    >
+      {isFirst ? (
+        <View style={styles.topCrownWrap}>
+          <CrownIcon />
+        </View>
+      ) : null}
+      <View
+        style={[
+          styles.avatarRing,
+          { borderColor: rankColor },
+          isFirst && styles.avatarRingFirst,
+          isThird && styles.avatarRingThird,
+        ]}
+      >
+        <View style={styles.avatarInner}>
+          <Text
+            style={[
+              styles.avatarInitials,
+              isFirst && styles.avatarInitialsFirst,
+              isThird && styles.avatarInitialsThird,
+            ]}
+          >
+            {getInitials(entry.displayName)}
+          </Text>
+        </View>
+      </View>
+      <View style={[styles.topRankPill, { borderColor: rankColor }]}>
+        <Text style={[styles.topRankBadge, { color: rankColor }]}>#{entry.rank}</Text>
+      </View>
+      <Text style={[styles.topName, isThird && styles.topNameThird]} numberOfLines={1}>
+        {entry.displayName}
+      </Text>
+      <Text style={[styles.topPoints, { color: rankColor }, isThird && styles.topPointsThird]}>
+        {entry.points}
+      </Text>
+      <Text style={styles.topMeta}>W/L: {entry.wins}/{entry.losses}</Text>
+      <CoinAmount
+        value={entry.balance.toLocaleString("en-IN")}
+        color="#73E2A8"
+        size={11}
+        weight="700"
+        iconSize={10}
+        align="center"
+      />
+    </View>
+  );
+}
+
+function getInitials(name: string) {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) {
+    return "P";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
 function formatSpinWinnerTime(value: unknown) {
   const millis = getTimestampValue(value);
 
@@ -658,59 +768,188 @@ const styles = StyleSheet.create({
     maxWidth: 1040,
     gap: 24,
   },
-  tabsWrap: {
-    gap: 8,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  refreshButton: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
+  headerRefreshButton: {
+    height: 34,
+    borderRadius: 11,
     borderWidth: 1,
-    borderColor: "#2F7FFF",
-    backgroundColor: "#143266",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderColor: "#365D9A",
+    backgroundColor: "#18284A",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  headerRefreshButtonText: {
+    color: "#D4E3FF",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  tabsWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#1F2F54",
+    backgroundColor: "#141F3D",
+    padding: 4,
   },
   refreshButtonDisabled: {
     opacity: 0.7,
   },
-  refreshButtonText: {
-    color: "#CFE0FF",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
   tabBar: {
     flexDirection: "row",
-    alignSelf: "flex-start",
-    gap: 12,
-  },
-  tabsDivider: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#2B426A",
+    alignItems: "center",
+    gap: 2,
   },
   tabButton: {
-    minHeight: 44,
+    flex: 1,
+    minHeight: 40,
     justifyContent: "center",
-    paddingBottom: 10,
+    alignItems: "center",
+    borderRadius: 10,
     position: "relative",
   },
   tabButtonText: {
-    color: "#9FB0CF",
+    color: "#A8B7D6",
     fontSize: 14,
     fontWeight: "700",
   },
   tabButtonTextActive: {
-    color: "#2F7FFF",
+    color: "#F1F6FF",
   },
   tabButtonUnderline: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 4,
-    borderRadius: 999,
+    left: 10,
+    right: 10,
+    bottom: 2,
+    height: 3,
+    borderRadius: 8,
     backgroundColor: "#2F7FFF",
+  },
+  podiumRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 12,
+  },
+  podiumSpacer: {
+    flex: 1,
+  },
+  topCardWrap: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#1A2D56",
+    borderWidth: 1,
+    borderColor: "#2A4777",
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    gap: 3,
+    minHeight: 166,
+    paddingTop: 18,
+  },
+  topCardWrapSecond: {
+    minHeight: 176,
+    marginTop: 20,
+  },
+  topCardWrapCenter: {
+    backgroundColor: "#243B6E",
+    borderColor: "#3A61A3",
+    minHeight: 214,
+    marginTop: 0,
+    transform: [{ scale: 1.02 }],
+    shadowColor: "#F6BE2C",
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 7,
+  },
+  topCardWrapThird: {
+    minHeight: 132,
+    marginTop: 44,
+    paddingVertical: 10,
+  },
+  avatarRing: {
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0E1B36",
+  },
+  topCrownWrap: {
+    position: "absolute",
+    top: -10,
+    alignSelf: "center",
+    zIndex: 3,
+  },
+  avatarRingFirst: {
+    width: 78,
+    height: 78,
+  },
+  avatarRingThird: {
+    width: 48,
+    height: 48,
+  },
+  avatarInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: "#0E1B36",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    color: "#D9E6FF",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  avatarInitialsFirst: {
+    fontSize: 20,
+  },
+  avatarInitialsThird: {
+    fontSize: 14,
+  },
+  topRankBadge: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  topRankPill: {
+    marginTop: 2,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    backgroundColor: "#13294F",
+  },
+  topName: {
+    color: "#F7FAFF",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  topNameThird: {
+    fontSize: 12,
+  },
+  topPoints: {
+    fontSize: 30,
+    lineHeight: 33,
+    fontWeight: "900",
+  },
+  topPointsThird: {
+    fontSize: 24,
+    lineHeight: 27,
+  },
+  topMeta: {
+    color: "#94A8CD",
+    fontSize: 11,
+    fontWeight: "700",
   },
   loadingState: {
     flex: 1,
