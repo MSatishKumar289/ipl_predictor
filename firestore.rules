@@ -34,7 +34,7 @@ service cloud.firestore {
     match /matches/{matchId} {
       allow read: if signedIn();
       allow create, update: if isAdmin();
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     match /predictions/{predictionId} {

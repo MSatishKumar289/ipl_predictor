@@ -23,7 +23,7 @@ import { REFERRAL_REWARD_AMOUNT } from "./referrals";
 
 const MATCH_LOCK_MINUTES = 35;
 const BETTING_OPEN_HOURS = 24;
-const WIN_POINTS = 3;
+const DEFAULT_WIN_POINTS = 3;
 const LEADERBOARD_PARTICIPATION_THRESHOLD = 0.35;
 const INACTIVITY_PENALTY_POINTS = 1;
 const SETTLEMENT_TRANSACTION_TYPES = new Set([
@@ -313,6 +313,10 @@ export async function createMatch(input: CreateMatchInput, createdBy: string) {
     lockAt: lockAt.toISOString(),
     status: "upcoming",
     winner: null,
+    winnerPoints:
+      Number.isFinite(input.winnerPoints) && (input.winnerPoints ?? 0) >= 0
+        ? Math.floor(input.winnerPoints as number)
+        : DEFAULT_WIN_POINTS,
     isEditableBeforeLock: input.isEditableBeforeLock,
     createdBy,
     settledAt: null,
@@ -326,6 +330,95 @@ export async function updateMatchSettings(matchId: string, isEditableBeforeLock:
   await updateDoc(doc(db, "matches", matchId), {
     isEditableBeforeLock,
     updatedAt: serverTimestamp(),
+  });
+}
+
+export async function updateMatchDetails(
+  matchId: string,
+  input: {
+    matchNumber: number;
+    teamAName: string;
+    teamBName: string;
+    teamAShort: string;
+    teamBShort: string;
+    startAt: string;
+    winnerPoints: number;
+  }
+) {
+  const matchRef = doc(db, "matches", matchId);
+  const startAtDate = new Date(input.startAt);
+  const lockAt = new Date(startAtDate.getTime() - MATCH_LOCK_MINUTES * 60 * 1000);
+
+  if (Number.isNaN(startAtDate.getTime())) {
+    throw new Error("Invalid match start date/time.");
+  }
+
+  if (!Number.isFinite(input.winnerPoints) || input.winnerPoints < 0) {
+    throw new Error("Winner points must be a valid non-negative number.");
+  }
+
+  await runTransaction(db, async (transaction) => {
+    const matchSnapshot = await transaction.get(matchRef);
+
+    if (!matchSnapshot.exists()) {
+      throw new Error("Match not found.");
+    }
+
+    const liveMatch = normalizeMatch({
+      id: matchSnapshot.id,
+      data: matchSnapshot.data() as Omit<MatchRecord, "id">,
+    });
+
+    if (
+      liveMatch.status === "settled" ||
+      liveMatch.status === "completed" ||
+      liveMatch.status === "no_result"
+    ) {
+      throw new Error("Settled/completed matches cannot be edited.");
+    }
+
+    transaction.update(matchRef, {
+      matchNumber: Math.floor(input.matchNumber),
+      teamAName: input.teamAName.trim(),
+      teamBName: input.teamBName.trim(),
+      teamAShort: input.teamAShort.trim().toUpperCase(),
+      teamBShort: input.teamBShort.trim().toUpperCase(),
+      startAt: startAtDate.toISOString(),
+      lockAt: lockAt.toISOString(),
+      winnerPoints: Math.floor(input.winnerPoints),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function deleteMatchBeforeBettingOpens(matchId: string) {
+  const matchRef = doc(db, "matches", matchId);
+
+  await runTransaction(db, async (transaction) => {
+    const matchSnapshot = await transaction.get(matchRef);
+
+    if (!matchSnapshot.exists()) {
+      throw new Error("Match not found.");
+    }
+
+    const liveMatch = normalizeMatch({
+      id: matchSnapshot.id,
+      data: matchSnapshot.data() as Omit<MatchRecord, "id">,
+    });
+
+    if (
+      liveMatch.status === "settled" ||
+      liveMatch.status === "completed" ||
+      liveMatch.status === "no_result"
+    ) {
+      throw new Error("Settled/completed matches cannot be deleted.");
+    }
+
+    if (getBettingState(liveMatch) !== "closed") {
+      throw new Error("Match can be deleted only before betting opens.");
+    }
+
+    transaction.delete(matchRef);
   });
 }
 
@@ -534,8 +627,9 @@ export async function settleMatchOutcome(matchId: string, winner: MatchOutcome, 
         const payoutMultiplier = hasDoubleCoinBoost ? 2 : 1;
         const pointsMultiplier = hasDoublePointsBoost ? 2 : 1;
         const payout = prediction.amount * 2 * payoutMultiplier;
-        const pointsAwarded = WIN_POINTS * pointsMultiplier;
-        const wheelPointsBonus = hasDoublePointsBoost ? WIN_POINTS : 0;
+        const baseWinnerPoints = latestMatch.winnerPoints ?? DEFAULT_WIN_POINTS;
+        const pointsAwarded = baseWinnerPoints * pointsMultiplier;
+        const wheelPointsBonus = hasDoublePointsBoost ? baseWinnerPoints : 0;
         const wheelCoinsBonus = hasDoubleCoinBoost ? prediction.amount * 2 : 0;
         const nextBalance = userData.balance + payout;
         const nextWheelPointsEarned = (userData.wheelPointsEarned ?? 0) + wheelPointsBonus;

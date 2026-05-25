@@ -14,6 +14,7 @@ export type MatchRecord = {
   lockAt: string;
   status: MatchStatus;
   winner: MatchOutcome;
+  winnerPoints?: number;
   isEditableBeforeLock: boolean;
   createdBy: string;
   settledAt?: string | null;
@@ -31,4 +32,5 @@ export type CreateMatchInput = {
   venue?: string | null;
   startAt: string;
   isEditableBeforeLock: boolean;
+  winnerPoints?: number;
 };
